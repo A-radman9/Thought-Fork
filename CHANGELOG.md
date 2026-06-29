@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-29
+
+### Added
+- `pyproject.toml` — `pip install thought-fork` now works, with optional `[api]` and `[dev]` extras
+- `synthesize()` — clean 3-line async entry point wrapping ForkManager + SynthesisEngine
+- `ForkResult` dataclass — structured return with `.synthesis`, `.forks`, `.token_usage`, `.duration_ms`
+- 3 new examples: `code_review.py`, `decision_making.py`, `research.py`
+- Pytest test suite (22 tests): Fork creation, stance resolution, ForkResult, public API imports
+- `README.md` — the manifesto defining Thought Fork as a concept
+
 ## [0.3.0] - 2026-06-29
 
 ### Added
