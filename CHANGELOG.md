@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-29
+
+### Added
+- Streaming FastAPI Layer:
+  - `POST /fork` endpoint that streams interleaved SSE events from parallel forks, followed by synthesis.
+  - `GET /forks/{session_id}` endpoint to retrieve past sessions.
+  - `GET /health` endpoint for monitoring.
+- SQLite persistence using `aiosqlite` to store completed sessions.
+- Pydantic models for structured requests, responses, and SSE events.
+- New dependencies: `fastapi`, `uvicorn`, `sse-starlette`, `aiosqlite`.
+
 ## [0.1.0] - 2026-06-29
 
 ### Added
