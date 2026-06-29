@@ -28,6 +28,11 @@ import sys
 import os
 import time
 
+# Ensure UTF-8 output on Windows terminals
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Add parent directory to path so we can import thought_fork
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

@@ -85,7 +85,7 @@ class ForkConfig:
         api_base_url: Base URL for the API (default: OpenRouter).
     """
 
-    fork_model: str = "anthropic/claude-3.5-haiku"
+    fork_model: str = "anthropic/claude-haiku-4.5"
     synthesis_model: str = "anthropic/claude-sonnet-4-6"
     default_stances: list[str] = field(
         default_factory=lambda: ["cautious", "creative", "critical"]
