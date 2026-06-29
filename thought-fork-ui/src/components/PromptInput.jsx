@@ -2,22 +2,17 @@
 
 import { useState } from 'react';
 
-const AVAILABLE_STANCES = [
-  'cautious', 'creative', 'critical', 'pragmatic',
-  'first-principles', 'optimistic', 'contrarian',
-];
-
 export default function PromptInput({ onFork, onReset, state }) {
   const [prompt, setPrompt] = useState('');
   const [forkCount, setForkCount] = useState(3);
 
-  const isRunning = state === 'forking' || state === 'synthesizing';
+  const isRunning = state === 'selecting' || state === 'forking' || state === 'synthesizing';
   const isComplete = state === 'complete';
 
   const handleFork = () => {
     if (!prompt.trim() || isRunning) return;
-    const stances = AVAILABLE_STANCES.slice(0, forkCount);
-    onFork(prompt.trim(), forkCount, stances);
+    // Always use dynamic stances — the AI will choose the best ones
+    onFork(prompt.trim(), forkCount, true);
   };
 
   const handleKeyDown = (e) => {
@@ -37,7 +32,7 @@ export default function PromptInput({ onFork, onReset, state }) {
         <textarea
           id="prompt-input"
           className="prompt__textarea"
-          placeholder="What do you want to fork? Try a question with no single right answer..."
+          placeholder="Ask anything. Thought Fork will select the best reasoning perspectives for your question…"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -77,8 +72,10 @@ export default function PromptInput({ onFork, onReset, state }) {
               onClick={handleFork}
               disabled={!prompt.trim() || isRunning}
             >
-              {isRunning ? (
-                <>⏳ Forking...</>
+              {state === 'selecting' ? (
+                <>🧠 Selecting…</>
+              ) : state === 'forking' || state === 'synthesizing' ? (
+                <>⏳ Forking…</>
               ) : (
                 <>🔀 Fork</>
               )}

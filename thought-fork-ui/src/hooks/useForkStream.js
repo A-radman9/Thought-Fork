@@ -6,35 +6,43 @@ const API_BASE = 'http://localhost:8000';
 
 /**
  * Custom hook for streaming fork sessions via fetch + ReadableStream.
- * We use fetch instead of EventSource because our endpoint is POST.
+ *
+ * State machine:
+ *   idle → selecting → forking → synthesizing → complete
+ *
+ * 'selecting': AI is choosing the best reasoning perspectives for this prompt.
+ * 'forking':   Parallel fork streams are streaming in.
+ * 'synthesizing': All forks done, synthesis is streaming.
+ * 'complete':  Everything done.
  */
 export function useForkStream() {
-  const [state, setState] = useState('idle'); // idle | forking | synthesizing | complete
+  const [state, setState] = useState('idle');
+  const [selectedStances, setSelectedStances] = useState([]); // [{id, name, description}]
   const [forks, setForks] = useState({});     // { A: { stance, text, tokens, duration, done } }
   const [synthesis, setSynthesis] = useState({ text: '', tokens: 0, duration: 0, done: false });
   const [sessionId, setSessionId] = useState(null);
   const abortRef = useRef(null);
 
-  const startFork = useCallback(async (prompt, forkCount, stances) => {
-    // Reset state
+  const startFork = useCallback(async (prompt, forkCount, useDynamicStances = true) => {
+    // Reset all state
+    setSelectedStances([]);
     setForks({});
     setSynthesis({ text: '', tokens: 0, duration: 0, done: false });
     setSessionId(null);
-    setState('forking');
+    setState('selecting'); // Phase 0: stance selection begins
 
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
-      const body = { prompt, fork_count: forkCount };
-      if (stances && stances.length > 0) {
-        body.stances = stances;
-      }
-
       const response = await fetch(`${API_BASE}/fork`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          prompt,
+          fork_count: forkCount,
+          use_dynamic_stances: useDynamicStances,
+        }),
         signal: controller.signal,
       });
 
@@ -52,25 +60,23 @@ export function useForkStream() {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Process complete SSE lines
         const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith('data: ')) continue;
 
-          const jsonStr = trimmed.slice(6).trim();
-          if (!jsonStr || jsonStr === '') continue;
+          let jsonStr = trimmed.slice(6).trim();
+          if (!jsonStr) continue;
 
-          // Handle potential double-prefixed data from SSE wrapping
-          let cleanJson = jsonStr;
-          if (cleanJson.startsWith('data: ')) {
-            cleanJson = cleanJson.slice(6).trim();
+          // Handle double-prefixed data from SSE wrapping
+          if (jsonStr.startsWith('data: ')) {
+            jsonStr = jsonStr.slice(6).trim();
           }
 
           try {
-            const event = JSON.parse(cleanJson);
+            const event = JSON.parse(jsonStr);
             processEvent(event);
           } catch {
             // skip malformed JSON
@@ -80,14 +86,22 @@ export function useForkStream() {
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error('Fork stream error:', err);
+        setState('idle');
       }
     }
   }, []);
 
   function processEvent(event) {
-    const { event_type, fork_id, stance, chunk, is_done, token_count, duration_ms, session_id } = event;
+    const { event_type, fork_id, stance, stances, chunk, token_count, duration_ms, session_id } = event;
 
     switch (event_type) {
+      // Phase 0: Stance selection complete
+      case 'stances_selected':
+        setSelectedStances(stances || []);
+        setState('forking');
+        break;
+
+      // Phase 1: Fork streaming
       case 'fork_start':
         setForks(prev => ({
           ...prev,
@@ -117,6 +131,7 @@ export function useForkStream() {
         }));
         break;
 
+      // Phase 2: Synthesis streaming
       case 'synthesis_chunk':
         setState('synthesizing');
         setSynthesis(prev => ({
@@ -143,6 +158,7 @@ export function useForkStream() {
       abortRef.current.abort();
     }
     setState('idle');
+    setSelectedStances([]);
     setForks({});
     setSynthesis({ text: '', tokens: 0, duration: 0, done: false });
     setSessionId(null);
@@ -150,6 +166,7 @@ export function useForkStream() {
 
   return {
     state,
+    selectedStances,
     forks,
     synthesis,
     sessionId,

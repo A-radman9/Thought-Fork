@@ -3,21 +3,24 @@
 import PromptInput from './components/PromptInput';
 import ForkGrid from './components/ForkGrid';
 import SynthesisPanel from './components/SynthesisPanel';
+import StancePreview from './components/StancePreview';
 import { useForkStream } from './hooks/useForkStream';
 
 const STATE_LABELS = {
   idle: null,
+  selecting: 'Analyzing your question to find the best reasoning perspectives…',
   forking: 'Forking — reasoning paths are streaming in parallel…',
-  synthesizing: 'Converging — synthesizing all forks into a unified answer…',
+  synthesizing: 'Converging — synthesizing all perspectives into a unified answer…',
   complete: null,
 };
 
 export default function App() {
-  const { state, forks, synthesis, sessionId, startFork, reset } = useForkStream();
+  const { state, selectedStances, forks, synthesis, sessionId, startFork, reset } = useForkStream();
 
   const statusLabel = STATE_LABELS[state];
   const hasForks = Object.keys(forks).length > 0;
   const showSynthesis = state === 'synthesizing' || state === 'complete';
+  const showStancePreview = state === 'selecting' || (state === 'forking' && !hasForks);
 
   // Compute totals for complete state
   const forkEntries = Object.values(forks);
@@ -38,7 +41,7 @@ export default function App() {
       {/* Prompt Input */}
       <PromptInput onFork={startFork} onReset={reset} state={state} />
 
-      {/* Status */}
+      {/* Status bar */}
       {statusLabel && (
         <div className="status" id="status-bar">
           <span className="status__dot" />
@@ -46,7 +49,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Fork Panels */}
+      {/* Stance Preview — shown while AI is selecting perspectives */}
+      {showStancePreview && (
+        <StancePreview stances={selectedStances} />
+      )}
+
+      {/* Fork Panels — shown once forks start streaming */}
       {hasForks && <ForkGrid forks={forks} />}
 
       {/* Synthesis */}

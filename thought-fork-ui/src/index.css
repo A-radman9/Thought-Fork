@@ -542,3 +542,87 @@ body {
     justify-content: center;
   }
 }
+
+/* ─── Stance Preview (selecting phase) ─── */
+.stance-preview {
+  width: 100%;
+  max-width: 1100px;
+  margin-bottom: 1.5rem;
+  animation: fadeSlideUp 0.3s ease-out both;
+}
+
+.stance-preview__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stance-preview__title-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.stance-preview__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.stance-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.35s ease, transform 0.35s ease, border-color 0.3s, box-shadow 0.3s;
+  flex: 1;
+  min-width: 220px;
+}
+
+.stance-card--revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.stance-card__id {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.stance-card__content {
+  flex: 1;
+}
+
+.stance-card__name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.2rem;
+  text-transform: capitalize;
+}
+
+.stance-card__desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
