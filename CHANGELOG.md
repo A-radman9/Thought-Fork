@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-29
+
+### Added
+- `StanceSelector` — AI-powered dynamic stance selection tailored to each specific prompt
+- `SelectedStance` dataclass — carries `id`, `name`, `description`, `system_prompt`
+- `use_dynamic_stances` flag in `ForkConfig` (default: `True`) — opt-out for tests/CI
+- New `stances_selected` SSE event emitted before any fork starts
+- `StancePreview` UI component — stances appear as staggered animated cards during selection
+- New `selecting` state in the UI state machine (`idle → selecting → forking → synthesizing → complete`)
+- Button shows `🧠 Selecting…` during the selection phase
+
+### Changed
+- `synthesize()` now calls `StanceSelector` by default when no explicit stances/forks provided
+- `ForkRequest` replaces `stances: list[str]` with `use_dynamic_stances: bool`
+- `PromptInput` no longer exposes static stance dropdowns
+- Status messages updated for all 4 phases
+
 ## [0.4.0] - 2026-06-29
 
 ### Added
