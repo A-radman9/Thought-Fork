@@ -21,30 +21,120 @@ explicit attribution.
 
 Concept and vocabulary by Ameen Saeed, June 2026.
 
-Quick usage::
+Simple usage::
 
-    from thought_fork import ForkManager, SynthesisEngine
+    from thought_fork import synthesize
 
-    manager = ForkManager()
-    forks = await manager.create_forks("Your question here")
-    forks = await manager.run_parallel(forks, "Your question here")
+    result = await synthesize("Should I migrate to microservices?", fork_count=3)
+    print(result.synthesis)          # Attributed final answer
+    print(result.forks["cautious"])  # Individual fork output
+    print(result.token_usage)        # {"forks": ..., "synthesis": ..., "total": ...}
 
-    engine = SynthesisEngine()
-    synthesis, tokens, duration = await engine.synthesize("Your question here", forks)
+Advanced usage with custom stances::
+
+    from thought_fork import Fork, synthesize
+
+    result = await synthesize(
+        "Review this architecture",
+        forks=[
+            Fork(id="A", stance="security",     system_prompt="Find vulnerabilities"),
+            Fork(id="B", stance="performance",  system_prompt="Find bottlenecks"),
+            Fork(id="C", stance="maintainability", system_prompt="Find complexity risks"),
+        ]
+    )
 """
 
-__version__ = "0.1.0"
+from __future__ import annotations
+
+import time
+
+__version__ = "0.4.0"
 __author__ = "Ameen Saeed"
 
 from thought_fork.config import BUILT_IN_STANCES, ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt
 from thought_fork.manager import ForkManager
+from thought_fork.result import ForkResult
 from thought_fork.synthesis import SynthesisEngine
 
+
+async def synthesize(
+    prompt: str,
+    fork_count: int = 3,
+    stances: list[str] | None = None,
+    forks: list[Fork] | None = None,
+    config: ForkConfig | None = None,
+) -> ForkResult:
+    """Fork a prompt into parallel reasoning paths and synthesize.
+
+    This is the main entry point for the Thought Fork library.
+    It wraps ForkManager + SynthesisEngine into a single async call.
+
+    Args:
+        prompt: The question or problem to fork.
+        fork_count: Number of forks to spawn (ignored if ``forks`` is provided).
+        stances: List of stance names. Defaults to the first N built-in stances.
+        forks: Advanced — provide pre-built Fork objects with custom system prompts.
+        config: Optional ForkConfig to override model selection and limits.
+
+    Returns:
+        A ForkResult containing the synthesis, individual fork outputs,
+        and token usage statistics.
+    """
+    config = config or ForkConfig()
+    manager = ForkManager(config)
+    engine = SynthesisEngine(config)
+
+    overall_start = time.perf_counter()
+
+    # Create or use provided forks
+    if forks is not None:
+        fork_list = forks
+    else:
+        resolved_stances = stances or list(BUILT_IN_STANCES.keys())[:fork_count]
+        fork_list = await manager.create_forks(prompt, resolved_stances)
+
+    # Run forks in parallel
+    fork_list = await manager.run_parallel(fork_list, prompt)
+
+    # Synthesize
+    synthesis_text, synthesis_tokens, synthesis_duration = (
+        await engine.synthesize(prompt, fork_list)
+    )
+
+    # Build result
+    total_fork_tokens = sum(f.token_count for f in fork_list)
+    total_tokens = total_fork_tokens + synthesis_tokens
+    overall_duration = int((time.perf_counter() - overall_start) * 1000)
+
+    return ForkResult(
+        synthesis=synthesis_text,
+        forks={f.stance: f.output for f in fork_list},
+        fork_details=[
+            {
+                "id": f.id,
+                "stance": f.stance,
+                "output": f.output,
+                "token_count": f.token_count,
+                "duration_ms": f.duration_ms,
+            }
+            for f in fork_list
+        ],
+        token_usage={
+            "forks": total_fork_tokens,
+            "synthesis": synthesis_tokens,
+            "total": total_tokens,
+        },
+        duration_ms=overall_duration,
+    )
+
+
 __all__ = [
+    "synthesize",
     "Fork",
     "ForkConfig",
     "ForkManager",
+    "ForkResult",
     "SynthesisEngine",
     "BUILT_IN_STANCES",
     "get_stance_prompt",
