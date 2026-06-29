@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-29
+
+### Added
+- React visual demo (`thought-fork-ui/`):
+  - Dark theme with glassmorphism, color-coded fork panels, and streaming animations
+  - PromptInput with configurable fork count (2–5 paths)
+  - ForkPanel components with auto-scroll, blinking cursor, and stance badges
+  - SynthesisPanel with copy-to-clipboard and session metadata
+  - `useForkStream` hook for streaming via fetch + ReadableStream
+  - Responsive layout (grid on desktop, stacked on mobile)
+  - Runs at `localhost:5173`, connects to API at `localhost:8000`
+
 ## [0.2.0] - 2026-06-29
 
 ### Added
