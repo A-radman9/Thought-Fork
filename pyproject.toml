@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "thought-fork"
+version = "0.4.0"
+description = "Branch AI reasoning into parallel thought paths"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "Ameen Saeed" },
+]
+keywords = ["ai", "reasoning", "parallel", "fork", "synthesis", "llm", "thought-fork"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "openai>=1.86.0",
+    "python-dotenv>=1.1.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sse-starlette>=2.3.0",
+    "aiosqlite>=0.21.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ameensaeed/thought-fork"
+Documentation = "https://github.com/ameensaeed/thought-fork#readme"
+Repository = "https://github.com/ameensaeed/thought-fork"
+Issues = "https://github.com/ameensaeed/thought-fork/issues"
+
+[tool.setuptools.packages.find]
+include = ["thought_fork*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
