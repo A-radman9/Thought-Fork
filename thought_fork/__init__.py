@@ -55,6 +55,7 @@ from thought_fork.config import BUILT_IN_STANCES, ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt
 from thought_fork.manager import ForkManager
 from thought_fork.result import ForkResult
+from thought_fork.stance_selector import SelectedStance, StanceSelector
 from thought_fork.synthesis import SynthesisEngine
 
 
@@ -89,9 +90,19 @@ async def synthesize(
 
     # Create or use provided forks
     if forks is not None:
+        # Advanced: caller provided pre-built Fork objects
         fork_list = forks
+    elif stances is not None:
+        # Caller specified explicit stance names → use built-ins / custom prompts
+        fork_list = await manager.create_forks(prompt, stances)
+    elif config.use_dynamic_stances:
+        # Default: let AI invent the best stances for this prompt
+        selector = StanceSelector(config)
+        selected = await selector.select(prompt, fork_count)
+        fork_list = selector.to_forks(selected)
     else:
-        resolved_stances = stances or list(BUILT_IN_STANCES.keys())[:fork_count]
+        # Dynamic stances disabled → use configured default stances
+        resolved_stances = list(BUILT_IN_STANCES.keys())[:fork_count]
         fork_list = await manager.create_forks(prompt, resolved_stances)
 
     # Run forks in parallel
@@ -135,6 +146,8 @@ __all__ = [
     "ForkConfig",
     "ForkManager",
     "ForkResult",
+    "SelectedStance",
+    "StanceSelector",
     "SynthesisEngine",
     "BUILT_IN_STANCES",
     "get_stance_prompt",

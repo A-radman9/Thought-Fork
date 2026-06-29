@@ -80,15 +80,21 @@ class ForkConfig:
     Attributes:
         fork_model: Model identifier for fork reasoning (fast/cheap).
         synthesis_model: Model identifier for synthesis (quality).
-        default_stances: List of stance names used when none are specified.
+        stance_selector_model: Model used for dynamic stance selection (fast/cheap).
+        default_stances: List of stance names used when none are specified and
+            dynamic stances are disabled.
         max_tokens: Maximum tokens per fork/synthesis response.
         api_base_url: Base URL for the API (default: OpenRouter).
+        use_dynamic_stances: If True (default), uses AI to invent custom stances
+            for each prompt. If False, uses default_stances (static built-ins).
     """
 
     fork_model: str = "anthropic/claude-haiku-4.5"
     synthesis_model: str = "anthropic/claude-sonnet-4-6"
+    stance_selector_model: str = "anthropic/claude-haiku-4.5"
     default_stances: list[str] = field(
         default_factory=lambda: ["cautious", "creative", "critical"]
     )
     max_tokens: int = 1024
     api_base_url: str = "https://openrouter.ai/api/v1"
+    use_dynamic_stances: bool = True
