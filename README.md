@@ -2,233 +2,147 @@
 
 **Branch your AI's reasoning like Git branches.**
 
-Thought Fork spawns parallel reasoning paths — each from a different *stance* — then merges them into a single answer that explicitly says which perspective contributed what.
+Thought Fork is a Python framework that introduces **Attributed Convergence** to AI reasoning. Instead of asking a single AI model to give you one generic answer, Thought Fork dynamically invents $N$ distinct reasoning perspectives (stances) tailored to your specific prompt, branches the AI into parallel reasoning streams, and then merges them back together into a single, synthesized, highly-structured answer.
 
-```python
-from thought_fork import synthesize
+The result? The AI explicitly credits *which* perspective contributed *what* insight, providing unprecedented transparency and depth.
 
-result = await synthesize("Should I migrate to microservices?", fork_count=3)
-print(result.synthesis)           # Attributed final answer
-print(result.forks["cautious"])   # Individual fork output
-print(result.token_usage)         # {"forks": 1240, "synthesis": 380, "total": 1620}
-```
+*Created by **Ameen Saeed** (Copyright © 2026).*
 
 ---
 
-## How It Works
+## 🚀 Why Thought Fork?
 
-```
-User Prompt
-     │
-     ▼
-ForkManager
-     │
-     ├──► Fork A (cautious)   → "Let me consider the risks..."
-     ├──► Fork B (creative)   → "What if we approached this from..."
-     └──► Fork C (critical)   → "I want to challenge the assumption..."
-                │
-                ▼
-        SynthesisEngine
-                │
-                ▼
-     "From the cautious fork's risk analysis...
-      The creative fork surfaced an angle...
-      The critical fork challenged the assumption..."
-```
+Standard LLM queries suffer from "averaging"—they give you the safest, most generic middle-ground answer. 
+Thought Fork solves this by forcing the model to argue with itself from distinct angles before concluding.
 
-All forks run **concurrently** via `asyncio`. The synthesis step uses a more capable model to merge outputs with **explicit attribution** — you can see exactly which perspective drove each insight.
+**Features:**
+- 🧠 **Dynamic Stance Selection:** The engine analyzes your prompt and automatically invents the perfect reasoning personas (e.g., *a pragmatic-startup-builder*, *a long-term-code-quality-advocate*, and *a performance-focused-engineer*).
+- ⚡ **Parallel Execution:** Forks are resolved concurrently using `asyncio`.
+- 🧬 **Attributed Convergence (Synthesis):** The final output weaves the parallel thoughts together, explicitly crediting the source of each idea and resolving contradictions.
+- 📡 **Server-Sent Events (SSE) Streaming:** Fully built-in SSE support for real-time frontend streaming of parallel forks.
 
 ---
 
-## Install
+## 📦 Installation
 
 ```bash
 pip install thought-fork
 ```
 
-With the streaming API server:
+### Requirements
+- Python 3.10+
+- `openai` (used as the universal async client)
+- `pydantic`
+
+---
+
+## 🔑 Configuration (Bring Your Own API)
+
+Thought Fork is provider-agnostic. Because it relies on the universal `AsyncOpenAI` client, you can use **OpenAI**, **Anthropic** (via OpenRouter), **Gemini**, or any OpenAI-compatible endpoint.
+
+By default, the library expects your API key in the environment variables:
 ```bash
-pip install thought-fork[api]
+export OPENROUTER_API_KEY="your-key-here"
+# or
+export OPENAI_API_KEY="your-key-here"
+```
+
+You can also pass the configuration explicitly in code using `ForkConfig`:
+
+```python
+from thought_fork import ForkConfig
+
+# Example 1: Using OpenAI directly
+config = ForkConfig(
+    api_key="sk-proj-...",
+    api_base_url="https://api.openai.com/v1",
+    fork_model="gpt-4o-mini",
+    synthesis_model="gpt-4o",
+    stance_selector_model="gpt-4o-mini"
+)
+
+# Example 2: Using Anthropic / Gemini via OpenRouter (Default)
+config = ForkConfig(
+    api_key="sk-or-v1-...",
+    api_base_url="https://openrouter.ai/api/v1",
+    fork_model="anthropic/claude-haiku-4.5",
+    synthesis_model="anthropic/claude-sonnet-4-6",
+    stance_selector_model="anthropic/claude-haiku-4.5"
+)
 ```
 
 ---
 
-## Quickstart
+## 💻 Quickstart (Python SDK)
+
+The easiest way to use Thought Fork is via the `synthesize()` helper function. 
 
 ```python
 import asyncio
-from thought_fork import synthesize
+from thought_fork import synthesize, ForkConfig
 
 async def main():
-    result = await synthesize(
-        "Should I build a monolith or microservices?",
-        fork_count=3,
-    )
+    config = ForkConfig(api_key="your-api-key")
+    prompt = "Should I build a monolith or microservices for my new startup?"
     
-    # The synthesis explicitly credits each fork
+    # This automatically invents 3 custom stances, runs them in parallel, 
+    # and synthesizes the final answer.
+    result = await synthesize(prompt, fork_count=3, config=config)
+    
+    print("--- Synthesis ---")
     print(result.synthesis)
     
-    # Access individual fork reasoning
-    for stance, output in result.forks.items():
-        print(f"\n--- {stance} ---")
-        print(output)
-    
-    # Token usage
-    print(result.token_usage)
-    # {"forks": 1155, "synthesis": 661, "total": 1816}
+    print("\n--- Individual Forks ---")
+    for fork in result.forks.values():
+        print(f"Fork {fork.id} ({fork.stance}): {fork.token_count} tokens")
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-### Custom Stances
+### Advanced Usage (Manual Forks)
+
+If you want to manually specify the stances instead of letting the AI invent them dynamically:
 
 ```python
-from thought_fork import Fork, synthesize
+from thought_fork import synthesize
 
-result = await synthesize(
-    "Review this architecture",
-    forks=[
-        Fork(id="A", stance="security",
-             system_prompt="Find vulnerabilities and injection risks."),
-        Fork(id="B", stance="performance",
-             system_prompt="Find bottlenecks and memory issues."),
-        Fork(id="C", stance="maintainability",
-             system_prompt="Find complexity risks and code smells."),
-    ],
-)
+stances = ["cautious", "creative", "pragmatic"]
+result = await synthesize(prompt, stances=stances)
 ```
 
----
-
-## Available Stances
-
-| Stance | What it does | Best for |
-|--------|-------------|----------|
-| **cautious** | Identifies risks, edge cases, failure modes | Architecture decisions, security reviews |
-| **creative** | Explores unconventional, non-obvious angles | Brainstorming, design problems |
-| **critical** | Challenges every assumption, plays devil's advocate | Code review, business plans |
-| **pragmatic** | Focuses on what's immediately practical | Planning, implementation |
-| **first-principles** | Breaks everything down to fundamentals | Complex problems, new domains |
-| **optimistic** | Identifies best-case outcomes and paths to achieve them | Strategy, motivation |
-| **contrarian** | Argues the opposite of the obvious answer | Challenging groupthink |
-
-You can also define **custom stances** by providing your own system prompt — any perspective you can describe, the fork can reason from.
+Or you can use the `ForkManager` directly to build your own custom pipeline (see the `examples/` directory in the repository).
 
 ---
 
-## The Concept
+## 🌐 The API Engine (FastAPI + SSE)
 
-Traditional AI gives you **one answer from one reasoning path**. That answer is shaped by whichever direction the model happened to take first. A different framing might have produced a different — possibly better — answer.
+Thought Fork isn't just a Python library; it ships with a production-ready **FastAPI streaming engine**.
 
-**Thought Fork** solves this by deliberately:
-
-1. **Forking** — spawning multiple reasoning paths from the same prompt
-2. **Biasing** — each fork reasons from a different *stance* via its system prompt
-3. **Running in parallel** — all forks execute concurrently (wall-clock time ≈ slowest fork)
-4. **Converging** — a synthesis step merges all outputs with explicit attribution
-
-The result isn't just "the best answer" — it's an answer that tells you *why* it concluded what it did, and *which perspective* drove each part of the conclusion.
-
-This is analogous to:
-- **Git branching** — branch, develop in parallel, merge with a clear diff
-- **Ensemble methods in ML** — multiple models, aggregated prediction  
-- **Dialectical reasoning** — thesis, antithesis, synthesis
-
----
-
-## Vocabulary
-
-| Term | Definition |
-|------|-----------|
-| **Fork** | A single parallel reasoning path |
-| **Forking** | Spawning parallel paths from one prompt |
-| **Stance** | The reasoning angle a fork takes |
-| **Convergence** | The synthesis step where all forks merge |
-| **Fork Depth** | How many levels of branching occurred |
-
----
-
-## API Reference
-
-### `synthesize(prompt, fork_count=3, stances=None, forks=None, config=None)`
-
-The main entry point. Returns a `ForkResult`.
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `prompt` | `str` | The question to fork |
-| `fork_count` | `int` | Number of forks (default: 3) |
-| `stances` | `list[str]` | Stance names (default: cautious, creative, critical) |
-| `forks` | `list[Fork]` | Advanced: pre-built Fork objects with custom prompts |
-| `config` | `ForkConfig` | Override models, token limits, API base URL |
-
-### `ForkResult`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `synthesis` | `str` | The merged, attributed answer |
-| `forks` | `dict[str, str]` | Stance → output text |
-| `fork_details` | `list[dict]` | Full data per fork (id, stance, output, tokens, duration) |
-| `token_usage` | `dict` | `{"forks": int, "synthesis": int, "total": int}` |
-| `duration_ms` | `int` | Total wall-clock time |
-
-### `ForkConfig`
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `fork_model` | `anthropic/claude-haiku-4.5` | Model for forks (fast/cheap) |
-| `synthesis_model` | `anthropic/claude-sonnet-4-6` | Model for synthesis (quality) |
-| `max_tokens` | `1024` | Max tokens per response |
-| `api_base_url` | OpenRouter | API endpoint |
-
----
-
-## Streaming API
-
-Thought Fork includes an optional FastAPI server for real-time streaming:
-
+To start the API server locally:
 ```bash
-pip install thought-fork[api]
 uvicorn api.main:app --port 8000
 ```
 
-- `POST /fork` — SSE stream with interleaved fork chunks + synthesis
-- `GET /forks/{session_id}` — retrieve a stored session
-- `GET /health` — health check
+The server exposes a POST `/fork` endpoint that streams Server-Sent Events (SSE). 
+
+**Event Flow:**
+1. `stances_selected` — Emitted first with the AI's chosen personas for the prompt.
+2. `fork_start` — Emitted when a specific reasoning path begins.
+3. `fork_chunk` — Real-time tokens streamed from parallel forks (interleaved).
+4. `fork_done` — Emitted when a fork finishes.
+5. `synthesis_chunk` — Real-time tokens for the final convergence.
+6. `synthesis_done` — Final event with token usage, timing metrics, and a `session_id`.
+
+*(See `api/streaming.py` for the full implementation.)*
 
 ---
 
-## Configuration
+## 📜 License & Copyright
 
-Set your API key in a `.env` file:
+Thought Fork is open-source software licensed under the **Apache License 2.0**.
 
-```
-OPENROUTER_API_KEY=your-key-here
-```
+**Copyright © 2026 Ameen Saeed.**
+If you use, modify, or distribute this framework, you must include the original copyright notice.
 
-Or use the Anthropic API directly by overriding the config:
-
-```python
-from thought_fork import synthesize, ForkConfig
-
-config = ForkConfig(
-    api_base_url="https://api.anthropic.com/v1",
-    fork_model="claude-3-5-haiku-20241022",
-    synthesis_model="claude-sonnet-4-6-20250514",
-)
-result = await synthesize("Your question", config=config)
-```
-
----
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTORS.md](CONTRIBUTORS.md) for guidelines.
-
-## License
-
-Apache 2.0 — see [LICENSE](LICENSE).
-
----
-
-*Concept and vocabulary by [Ameen Saeed](https://github.com/ameensaeed), June 2026.*
+> "A tool is only as good as the perspectives it considers."
