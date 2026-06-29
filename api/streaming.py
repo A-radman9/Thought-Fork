@@ -15,16 +15,16 @@
 """
 Thought Fork API — Streaming fork execution with interleaved SSE.
 
-This module handles the core streaming logic: running multiple forks
-concurrently with interleaved chunk output, then streaming the synthesis.
-All chunks are pushed to an asyncio.Queue so the SSE endpoint can yield
-them in real-time.
+This module handles the core streaming logic:
+  Phase 0: Dynamic stance selection (AI picks the best perspectives)
+  Phase 1: Parallel fork streaming (interleaved SSE chunks)
+  Phase 2: Synthesis streaming
+  Phase 3: Session persistence to SQLite
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import string
 import time
@@ -33,39 +33,52 @@ from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
-from api.models import ForkEvent
+from api.models import ForkEvent, SelectedStanceModel
 
 # Add parent path for thought_fork imports
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from thought_fork.config import ForkConfig, BUILT_IN_STANCES
+from thought_fork.config import ForkConfig
+from thought_fork.stance_selector import StanceSelector, SelectedStance
 from thought_fork.synthesis import _SYNTHESIS_SYSTEM_PROMPT, _SYNTHESIS_USER_TEMPLATE, _FORK_OUTPUT_TEMPLATE
 
 
 async def stream_fork_session(
     prompt: str,
-    stances: list[str],
+    fork_count: int,
+    use_dynamic_stances: bool = True,
     config: ForkConfig | None = None,
 ) -> AsyncGenerator[str, None]:
     """Run forks with streaming and yield interleaved SSE events.
 
-    This is the heart of the Phase 2 API. It:
-    1. Spawns N fork streams concurrently
-    2. Collects chunks from all forks into a shared queue (interleaved)
-    3. Yields each chunk as an SSE-formatted JSON event
-    4. After all forks complete, streams the synthesis
-    5. Saves the session to SQLite
+    Phase 0 — Dynamic Stance Selection:
+        Calls StanceSelector to invent N reasoning perspectives for this
+        specific prompt. Emits a `stances_selected` event immediately so
+        the UI can show the selected stances before any fork starts.
+
+    Phase 1 — Parallel Fork Streaming:
+        Spawns N fork streams concurrently. Chunks from all forks are
+        pushed to a shared asyncio.Queue and yielded interleaved.
+
+    Phase 2 — Synthesis Streaming:
+        After all forks complete, streams the synthesis response.
+
+    Phase 3 — Persistence:
+        Saves the completed session to SQLite.
 
     Args:
         prompt: The user's question.
-        stances: List of stance names for each fork.
+        fork_count: Number of parallel forks to spawn.
+        use_dynamic_stances: If True, use AI to select stances dynamically.
         config: Optional ForkConfig override.
 
     Yields:
         JSON-encoded ForkEvent strings, one per SSE event.
     """
     config = config or ForkConfig()
+    config.use_dynamic_stances = use_dynamic_stances
+
     client = AsyncOpenAI(
         base_url=config.api_base_url,
         api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -78,16 +91,38 @@ async def stream_fork_session(
     # Track completed fork data for synthesis and persistence
     fork_results: dict[str, dict] = {}
 
-    async def _stream_single_fork(index: int, stance: str) -> None:
-        """Stream a single fork and push chunks to the shared queue."""
-        fork_id = letters[index] if index < len(letters) else str(index)
-        system_prompt = BUILT_IN_STANCES.get(stance, stance)
+    # -----------------------------------------------------------------------
+    # Phase 0: Dynamic Stance Selection
+    # -----------------------------------------------------------------------
+    selector = StanceSelector(config)
+    selected_stances: list[SelectedStance] = await selector.select(
+        prompt, fork_count
+    )
 
-        # Emit fork_start event
+    # Emit stances_selected event immediately so the UI can show the selections
+    stances_event = ForkEvent(
+        event_type="stances_selected",
+        stances=[
+            SelectedStanceModel(
+                id=s.id,
+                name=s.name,
+                description=s.description,
+            )
+            for s in selected_stances
+        ],
+    )
+    yield f"data: {stances_event.model_dump_json()}\n\n"
+
+    # -----------------------------------------------------------------------
+    # Phase 1: Parallel Fork Streaming
+    # -----------------------------------------------------------------------
+
+    async def _stream_single_fork(stance: SelectedStance) -> None:
+        """Stream a single fork and push chunks to the shared queue."""
         await queue.put(ForkEvent(
             event_type="fork_start",
-            fork_id=fork_id,
-            stance=stance,
+            fork_id=stance.id,
+            stance=stance.name,
         ))
 
         full_output = ""
@@ -99,7 +134,7 @@ async def stream_fork_session(
                 model=config.fork_model,
                 max_tokens=config.max_tokens,
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": stance.system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 stream=True,
@@ -111,33 +146,31 @@ async def stream_fork_session(
                     full_output += text
                     await queue.put(ForkEvent(
                         event_type="fork_chunk",
-                        fork_id=fork_id,
-                        stance=stance,
+                        fork_id=stance.id,
+                        stance=stance.name,
                         chunk=text,
                     ))
 
-                # Capture usage from the final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     token_count = chunk.usage.completion_tokens or 0
 
         except Exception as e:
-            full_output = f"[Fork {fork_id} error: {e}]"
+            full_output = f"[Fork {stance.id} error: {e}]"
             await queue.put(ForkEvent(
                 event_type="fork_chunk",
-                fork_id=fork_id,
-                stance=stance,
+                fork_id=stance.id,
+                stance=stance.name,
                 chunk=full_output,
             ))
 
         elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
-        # If no usage was reported via streaming, estimate from output
         if token_count == 0:
-            token_count = len(full_output.split()) * 4 // 3  # rough estimate
+            token_count = len(full_output.split()) * 4 // 3
 
-        fork_results[fork_id] = {
-            "fork_id": fork_id,
-            "stance": stance,
+        fork_results[stance.id] = {
+            "fork_id": stance.id,
+            "stance": stance.name,
             "output": full_output,
             "token_count": token_count,
             "duration_ms": elapsed_ms,
@@ -145,26 +178,19 @@ async def stream_fork_session(
 
         await queue.put(ForkEvent(
             event_type="fork_done",
-            fork_id=fork_id,
-            stance=stance,
+            fork_id=stance.id,
+            stance=stance.name,
             is_done=True,
             token_count=token_count,
             duration_ms=elapsed_ms,
         ))
 
-    # -----------------------------------------------------------------------
-    # Phase 1: Stream all forks concurrently
-    # -----------------------------------------------------------------------
+    # Spawn all fork tasks concurrently
     fork_tasks = [
-        asyncio.create_task(_stream_single_fork(i, stance))
-        for i, stance in enumerate(stances)
+        asyncio.create_task(_stream_single_fork(stance))
+        for stance in selected_stances
     ]
 
-    # Consumer: yield events as they arrive from all forks
-    completed_forks = 0
-    total_forks = len(stances)
-
-    # Producer task that signals completion
     async def _run_all_forks():
         await asyncio.gather(*fork_tasks)
         await queue.put(None)  # sentinel
@@ -177,12 +203,11 @@ async def stream_fork_session(
             break
         yield f"data: {event.model_dump_json()}\n\n"
 
-    await producer  # ensure cleanup
+    await producer
 
     # -----------------------------------------------------------------------
-    # Phase 2: Stream synthesis
+    # Phase 2: Synthesis Streaming
     # -----------------------------------------------------------------------
-    # Build synthesis prompt from fork results
     ordered_forks = sorted(fork_results.values(), key=lambda f: f["fork_id"])
 
     fork_outputs_text = "\n".join(
@@ -231,19 +256,13 @@ async def stream_fork_session(
 
     except Exception as e:
         synthesis_text = f"[Synthesis error: {e}]"
-        event = ForkEvent(
-            event_type="synthesis_chunk",
-            fork_id="synthesis",
-            chunk=synthesis_text,
-        )
-        yield f"data: {event.model_dump_json()}\n\n"
+        yield f"data: {ForkEvent(event_type='synthesis_chunk', fork_id='synthesis', chunk=synthesis_text).model_dump_json()}\n\n"
 
     synthesis_duration_ms = int((time.perf_counter() - synthesis_start) * 1000)
 
     if synthesis_token_count == 0:
         synthesis_token_count = len(synthesis_text.split()) * 4 // 3
 
-    # Final done event
     total_tokens = sum(f["token_count"] for f in fork_results.values()) + synthesis_token_count
 
     done_event = ForkEvent(
@@ -257,7 +276,7 @@ async def stream_fork_session(
     yield f"data: {done_event.model_dump_json()}\n\n"
 
     # -----------------------------------------------------------------------
-    # Persist session
+    # Phase 3: Persist session
     # -----------------------------------------------------------------------
     from api.database import save_session
 

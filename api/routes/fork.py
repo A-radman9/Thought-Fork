@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from api.models import ForkRequest, SessionResponse, ForkOutput
 from api.streaming import stream_fork_session
 from api.database import get_session
-from thought_fork.config import ForkConfig, BUILT_IN_STANCES
+from thought_fork.config import ForkConfig
 
 router = APIRouter()
 
@@ -44,25 +44,20 @@ async def create_fork(request: ForkRequest):
 
     The response is a Server-Sent Events stream. Events arrive in this order:
 
-    1. `fork_start` — one per fork, when it begins
-    2. `fork_chunk` — text chunks from each fork (interleaved across all forks)
-    3. `fork_done` — one per fork, when it completes
-    4. `synthesis_chunk` — text chunks from the synthesis
-    5. `synthesis_done` — final event with session_id for retrieval
+    1. `stances_selected` — AI-chosen perspectives for this prompt
+    2. `fork_start` — one per fork, when it begins
+    3. `fork_chunk` — text chunks from each fork (interleaved across all forks)
+    4. `fork_done` — one per fork, when it completes
+    5. `synthesis_chunk` — text chunks from the synthesis
+    6. `synthesis_done` — final event with session_id for retrieval
     """
-    # Resolve stances
-    if request.stances:
-        stances = request.stances[:request.fork_count]
-    else:
-        default_stances = list(BUILT_IN_STANCES.keys())
-        stances = default_stances[: request.fork_count]
-
     config = ForkConfig()
 
     return EventSourceResponse(
         stream_fork_session(
             prompt=request.prompt,
-            stances=stances,
+            fork_count=request.fork_count,
+            use_dynamic_stances=request.use_dynamic_stances,
             config=config,
         ),
         media_type="text/event-stream",

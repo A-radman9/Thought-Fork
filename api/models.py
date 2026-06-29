@@ -25,6 +25,14 @@ from pydantic import BaseModel, Field
 # Request models
 # ---------------------------------------------------------------------------
 
+class SelectedStanceModel(BaseModel):
+    """A dynamically-selected stance, carried in the stances_selected SSE event."""
+
+    id: str = Field(..., description="Fork letter ID (A, B, C, ...).")
+    name: str = Field(..., description="Kebab-case stance name, e.g. 'risk-analyst'.")
+    description: str = Field(..., description="One sentence describing this perspective.")
+
+
 class ForkRequest(BaseModel):
     """Request body for the POST /fork endpoint."""
 
@@ -39,12 +47,11 @@ class ForkRequest(BaseModel):
         le=7,
         description="Number of parallel forks to spawn (2–7).",
     )
-    stances: list[str] | None = Field(
-        default=None,
+    use_dynamic_stances: bool = Field(
+        default=True,
         description=(
-            "List of stance names for each fork. If omitted, uses the first "
-            "N default stances. Available: cautious, creative, critical, "
-            "pragmatic, first-principles, optimistic, contrarian."
+            "If True (default), the AI selects the best stances for this prompt. "
+            "If False, uses the first N built-in stances (cautious, creative, critical...)."
         ),
     )
 
@@ -57,16 +64,20 @@ class ForkEvent(BaseModel):
     """A single Server-Sent Event emitted during fork streaming.
 
     Events flow in this order:
-    1. fork_start — one per fork, emitted when a fork begins
-    2. fork_chunk — streamed text chunks from each fork (interleaved)
-    3. fork_done — one per fork, emitted when a fork completes
-    4. synthesis_chunk — streamed text chunks from the synthesis
-    5. synthesis_done — final event with session_id
+    1. stances_selected — fires once before any fork starts, carries chosen stances
+    2. fork_start — one per fork, emitted when a fork begins
+    3. fork_chunk — streamed text chunks from each fork (interleaved)
+    4. fork_done — one per fork, emitted when a fork completes
+    5. synthesis_chunk — streamed text chunks from the synthesis
+    6. synthesis_done — final event with session_id
     """
 
     event_type: str = Field(
         ...,
-        description="One of: fork_start, fork_chunk, fork_done, synthesis_chunk, synthesis_done",
+        description=(
+            "One of: stances_selected, fork_start, fork_chunk, fork_done, "
+            "synthesis_chunk, synthesis_done"
+        ),
     )
     fork_id: str | None = Field(
         default=None,
@@ -74,7 +85,11 @@ class ForkEvent(BaseModel):
     )
     stance: str | None = Field(
         default=None,
-        description="The fork's stance (null for synthesis events).",
+        description="The fork's stance name (null for stances_selected and synthesis events).",
+    )
+    stances: list[SelectedStanceModel] | None = Field(
+        default=None,
+        description="Only present in stances_selected event.",
     )
     chunk: str | None = Field(
         default=None,
