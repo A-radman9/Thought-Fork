@@ -75,25 +75,13 @@ _SELECTOR_SYSTEM = (
     "Just raw JSON."
 )
 
-_SELECTOR_USER = (
-    "Select exactly {fork_count} reasoning perspectives for this question.\n\n"
-    "Question: {prompt}\n\n"
-    "Return a JSON array with exactly {fork_count} objects. Each object must have:\n"
+_SELECTOR_USER_TEMPLATE = (
+    "Select exactly {n} reasoning perspectives for this question.\n\n"
+    "Question: {q}\n\n"
+    "Return a JSON array with exactly {n} objects. Each object must have:\n"
     '- "name": short kebab-case label (e.g. "risk-analyst", "contrarian-economist")\n'
     '- "description": one sentence explaining this perspective\'s unique angle\n'
-    '- "system_prompt": the full system prompt to give an AI reasoning from this '
-    "perspective. Should be 2-3 sentences that define the role, mindset, and what "
-    "to focus on.\n\n"
-    "Example format:\n"
-    '[\n'
-    '  {\n'
-    '    "name": "risk-analyst",\n'
-    '    "description": "Focuses on what could go wrong and what safeguards are needed.",\n'
-    '    "system_prompt": "You are a risk analyst. Your job is to surface every '
-    "risk, failure mode, and hidden downside in the situation. Be thorough about "
-    'what could go wrong before discussing what could go right."\n'
-    '  }\n'
-    ']'
+    '- "system_prompt": 2-3 sentences defining the role, mindset, and focus area'
 )
 
 
@@ -116,7 +104,7 @@ class StanceSelector:
         self.config = config or ForkConfig()
         self._client = AsyncOpenAI(
             base_url=self.config.api_base_url,
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_key=self.config.api_key,
         )
 
     async def select(
@@ -149,9 +137,10 @@ class StanceSelector:
                     {"role": "system", "content": _SELECTOR_SYSTEM},
                     {
                         "role": "user",
-                        "content": _SELECTOR_USER.format(
-                            fork_count=fork_count,
-                            prompt=prompt,
+                        "content": (
+                            _SELECTOR_USER_TEMPLATE
+                            .replace("{n}", str(fork_count))
+                            .replace("{q}", prompt)
                         ),
                     },
                 ],
@@ -173,19 +162,21 @@ class StanceSelector:
     ) -> list[SelectedStance]:
         """Parse the AI JSON response into SelectedStance objects.
 
-        Tries to extract a valid JSON array from the response. Handles
-        common issues like the model wrapping the JSON in markdown code blocks.
+        Handles common issues like markdown code fences (```json ... ```).
         Falls back to built-in stances on any parse failure.
         """
-        # Strip markdown code fences if present
         text = raw.strip()
+
+        # Strip markdown code fences: ```json\n...\n``` or ```\n...\n```
         if text.startswith("```"):
+            # Remove first line (```json or ```) and last fence (```)
             lines = text.split("\n")
-            # Remove first and last fence lines
-            text = "\n".join(
-                line for line in lines
-                if not line.strip().startswith("```")
-            ).strip()
+            # Drop first line (the opening fence)
+            lines = lines[1:]
+            # Drop last line if it's a closing fence
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
 
         # Find the JSON array boundaries
         start = text.find("[")
@@ -220,7 +211,6 @@ class StanceSelector:
             ))
 
         if len(stances) < 2:
-            # Not enough valid stances parsed
             return self._fallback(fork_count, letters)
 
         # Pad to fork_count if AI returned fewer than requested

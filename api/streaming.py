@@ -81,7 +81,7 @@ async def stream_fork_session(
 
     client = AsyncOpenAI(
         base_url=config.api_base_url,
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        api_key=config.api_key,
     )
 
     session_id = uuid.uuid4().hex[:12]

@@ -37,15 +37,17 @@ from thought_fork.fork import Fork
 _SYNTHESIS_SYSTEM_PROMPT = """\
 You are the Synthesis Engine in the Thought Fork framework. Your role is to \
 merge multiple parallel reasoning paths ("forks") into a single, comprehensive \
-answer.
+and highly structured answer.
 
 Rules:
 1. Integrate insights from ALL forks — do not ignore any fork.
 2. Explicitly attribute each insight to its source fork using phrases like \
 "From the cautious fork..." or "The creative perspective revealed..."
 3. Resolve contradictions by explaining the tension and offering a balanced view.
-4. The final answer should be MORE insightful than any individual fork alone.
-5. Keep the attribution natural — weave it into the narrative, don't just list forks.
+4. USE RICH MARKDOWN: Format your answer beautifully. Use Markdown tables to compare \
+viewpoints, bullet points for lists, and clear headers (H2/H3) to structure the synthesis.
+5. The final answer should be MORE insightful than any individual fork alone.
+6. Keep the attribution natural — weave it into the narrative, but use formatting to make it pop.
 """
 
 _SYNTHESIS_USER_TEMPLATE = """\
@@ -82,7 +84,7 @@ class SynthesisEngine:
         self.config = config or ForkConfig()
         self._client = AsyncOpenAI(
             base_url=self.config.api_base_url,
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_key=self.config.api_key,
         )
 
     async def synthesize(

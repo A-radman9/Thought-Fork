@@ -20,6 +20,7 @@ behavior, and the BUILT_IN_STANCES dictionary mapping stance names to their
 system prompts.
 """
 
+import os
 from dataclasses import dataclass, field
 
 
@@ -85,6 +86,8 @@ class ForkConfig:
             dynamic stances are disabled.
         max_tokens: Maximum tokens per fork/synthesis response.
         api_base_url: Base URL for the API (default: OpenRouter).
+        api_key: API key for the provider. If None, attempts to resolve from
+            OPENAI_API_KEY or OPENROUTER_API_KEY environment variables.
         use_dynamic_stances: If True (default), uses AI to invent custom stances
             for each prompt. If False, uses default_stances (static built-ins).
     """
@@ -97,4 +100,10 @@ class ForkConfig:
     )
     max_tokens: int = 1024
     api_base_url: str = "https://openrouter.ai/api/v1"
+    api_key: str | None = None
     use_dynamic_stances: bool = True
+
+    def __post_init__(self):
+        """Resolve API key from environment if not explicitly provided."""
+        if not self.api_key:
+            self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")

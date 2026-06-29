@@ -46,7 +46,7 @@ class ForkManager:
         self.config = config or ForkConfig()
         self._client = AsyncOpenAI(
             base_url=self.config.api_base_url,
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_key=self.config.api_key,
         )
 
     async def create_forks(
