@@ -2,13 +2,9 @@
 
 """Tests for ForkResult and synthesize() function signature."""
 
-import sys
-import os
 import inspect
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from thought_fork import synthesize, ForkResult, Fork
+from thought_fork import synthesize, ForkResult, Fork, ForkConfig
 from thought_fork.result import ForkResult as ForkResultDirect
 
 
@@ -100,6 +96,80 @@ class TestPublicAPI:
             SynthesisEngine,
             BUILT_IN_STANCES,
             get_stance_prompt,
+            SYNTHESIS_SYSTEM_PROMPT,
+            SYNTHESIS_USER_TEMPLATE,
+            FORK_OUTPUT_TEMPLATE,
         )
         # All imports succeeded
         assert True
+
+
+class TestConfigValidation:
+    """Tests for the new ForkConfig validation and fields."""
+
+    def test_missing_api_key_raises(self):
+        """ForkConfig should raise ValueError when no API key is available."""
+        import os
+        # Temporarily clear env vars
+        old_or = os.environ.pop("OPENROUTER_API_KEY", None)
+        old_oai = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            import pytest
+            with pytest.raises(ValueError, match="No API key found"):
+                ForkConfig(api_base_url="https://api.openai.com/v1")
+        finally:
+            if old_or is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_or
+            if old_oai is not None:
+                os.environ["OPENAI_API_KEY"] = old_oai
+
+    def test_local_url_bypasses_api_key_check(self):
+        """ForkConfig should NOT raise ValueError for local URLs without an API key."""
+        import os
+        old_or = os.environ.pop("OPENROUTER_API_KEY", None)
+        old_oai = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            # This should not raise
+            config = ForkConfig(api_base_url="http://localhost:11434/v1")
+            assert config.api_key is None
+            
+            config2 = ForkConfig(api_base_url="http://127.0.0.1:8000/v1")
+            assert config2.api_key is None
+        finally:
+            if old_or is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_or
+            if old_oai is not None:
+                os.environ["OPENAI_API_KEY"] = old_oai
+
+    def test_explicit_api_key_works(self):
+        config = ForkConfig(api_key="test-key-123")
+        assert config.api_key == "test-key-123"
+
+    def test_synthesis_max_tokens_default(self):
+        config = ForkConfig(api_key="test-key")
+        assert config.synthesis_max_tokens == 6144
+        assert config.max_tokens == 2048
+
+    def test_timeout_seconds_default(self):
+        config = ForkConfig(api_key="test-key")
+        assert config.timeout_seconds == 120.0
+
+
+class TestPublicConstants:
+    """Test that synthesis constants are accessible as public API."""
+
+    def test_synthesis_system_prompt_is_string(self):
+        from thought_fork import SYNTHESIS_SYSTEM_PROMPT
+        assert isinstance(SYNTHESIS_SYSTEM_PROMPT, str)
+        assert len(SYNTHESIS_SYSTEM_PROMPT) > 50
+
+    def test_synthesis_user_template_has_placeholders(self):
+        from thought_fork import SYNTHESIS_USER_TEMPLATE
+        assert "{fork_count}" in SYNTHESIS_USER_TEMPLATE
+        assert "{prompt}" in SYNTHESIS_USER_TEMPLATE
+
+    def test_fork_output_template_has_placeholders(self):
+        from thought_fork import FORK_OUTPUT_TEMPLATE
+        assert "{fork_id}" in FORK_OUTPUT_TEMPLATE
+        assert "{stance}" in FORK_OUTPUT_TEMPLATE
+

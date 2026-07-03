@@ -2,11 +2,6 @@
 
 """Tests for Fork dataclass, stance resolution, and ForkConfig."""
 
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from thought_fork.config import BUILT_IN_STANCES, ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt
 
@@ -65,7 +60,7 @@ class TestForkConfig:
     """Tests for ForkConfig."""
 
     def test_default_config(self):
-        config = ForkConfig()
+        config = ForkConfig(api_key="test-key")
         assert "haiku" in config.fork_model.lower() or "claude" in config.fork_model.lower()
         assert "sonnet" in config.synthesis_model.lower() or "claude" in config.synthesis_model.lower()
         assert config.max_tokens > 0
@@ -74,6 +69,7 @@ class TestForkConfig:
 
     def test_custom_config(self):
         config = ForkConfig(
+            api_key="test-key",
             fork_model="custom/model-a",
             synthesis_model="custom/model-b",
             max_tokens=512,
@@ -84,7 +80,7 @@ class TestForkConfig:
         assert len(config.default_stances) == 2
 
     def test_api_base_url_default(self):
-        config = ForkConfig()
+        config = ForkConfig(api_key="test-key")
         assert "openrouter" in config.api_base_url
 
 

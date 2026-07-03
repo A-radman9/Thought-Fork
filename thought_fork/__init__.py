@@ -48,15 +48,21 @@ from __future__ import annotations
 
 import time
 
-__version__ = "0.4.0"
+__version__ = "0.6.0"
 __author__ = "Ameen Saeed"
 
 from thought_fork.config import BUILT_IN_STANCES, ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt
 from thought_fork.manager import ForkManager
+from thought_fork.message import Message
 from thought_fork.result import ForkResult
 from thought_fork.stance_selector import SelectedStance, StanceSelector
-from thought_fork.synthesis import SynthesisEngine
+from thought_fork.synthesis import (
+    FORK_OUTPUT_TEMPLATE,
+    SYNTHESIS_SYSTEM_PROMPT,
+    SYNTHESIS_USER_TEMPLATE,
+    SynthesisEngine,
+)
 
 
 async def synthesize(
@@ -64,6 +70,7 @@ async def synthesize(
     fork_count: int = 3,
     stances: list[str] | None = None,
     forks: list[Fork] | None = None,
+    history: list[Message] | None = None,
     config: ForkConfig | None = None,
 ) -> ForkResult:
     """Fork a prompt into parallel reasoning paths and synthesize.
@@ -76,6 +83,7 @@ async def synthesize(
         fork_count: Number of forks to spawn (ignored if ``forks`` is provided).
         stances: List of stance names. Defaults to the first N built-in stances.
         forks: Advanced — provide pre-built Fork objects with custom system prompts.
+        history: Optional list of previous Message objects for multi-turn context.
         config: Optional ForkConfig to override model selection and limits.
 
     Returns:
@@ -94,23 +102,23 @@ async def synthesize(
         fork_list = forks
     elif stances is not None:
         # Caller specified explicit stance names → use built-ins / custom prompts
-        fork_list = await manager.create_forks(prompt, stances)
+        fork_list = manager.create_forks(prompt, stances)
     elif config.use_dynamic_stances:
         # Default: let AI invent the best stances for this prompt
         selector = StanceSelector(config)
-        selected = await selector.select(prompt, fork_count)
+        selected = await selector.select(prompt, fork_count, history)
         fork_list = selector.to_forks(selected)
     else:
         # Dynamic stances disabled → use configured default stances
         resolved_stances = list(BUILT_IN_STANCES.keys())[:fork_count]
-        fork_list = await manager.create_forks(prompt, resolved_stances)
+        fork_list = manager.create_forks(prompt, resolved_stances)
 
     # Run forks in parallel
-    fork_list = await manager.run_parallel(fork_list, prompt)
+    fork_list = await manager.run_parallel(fork_list, prompt, history)
 
     # Synthesize
     synthesis_text, synthesis_tokens, synthesis_duration = (
-        await engine.synthesize(prompt, fork_list)
+        await engine.synthesize(prompt, fork_list, history)
     )
 
     # Build result
@@ -150,5 +158,8 @@ __all__ = [
     "StanceSelector",
     "SynthesisEngine",
     "BUILT_IN_STANCES",
+    "FORK_OUTPUT_TEMPLATE",
+    "SYNTHESIS_SYSTEM_PROMPT",
+    "SYNTHESIS_USER_TEMPLATE",
     "get_stance_prompt",
 ]

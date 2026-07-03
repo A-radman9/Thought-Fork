@@ -41,11 +41,9 @@ class ForkRequest(BaseModel):
         description="The question or problem to fork into parallel reasoning paths.",
         min_length=1,
     )
-    fork_count: int = Field(
-        default=3,
-        ge=2,
-        le=7,
-        description="Number of parallel forks to spawn (2–7).",
+    fork_count: int | str = Field(
+        default="auto",
+        description="Number of parallel forks to spawn (2–10) or 'auto'.",
     )
     use_dynamic_stances: bool = Field(
         default=True,
@@ -54,6 +52,14 @@ class ForkRequest(BaseModel):
             "If False, uses the first N built-in stances (cautious, creative, critical...)."
         ),
     )
+    stances: list[str] | None = Field(
+        default=None,
+        description="Manual list of stances to use (overrides use_dynamic_stances if length >= fork_count).",
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="If provided, appends this turn to the existing session history.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -61,16 +67,7 @@ class ForkRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ForkEvent(BaseModel):
-    """A single Server-Sent Event emitted during fork streaming.
-
-    Events flow in this order:
-    1. stances_selected — fires once before any fork starts, carries chosen stances
-    2. fork_start — one per fork, emitted when a fork begins
-    3. fork_chunk — streamed text chunks from each fork (interleaved)
-    4. fork_done — one per fork, emitted when a fork completes
-    5. synthesis_chunk — streamed text chunks from the synthesis
-    6. synthesis_done — final event with session_id
-    """
+    """A single Server-Sent Event emitted during fork streaming."""
 
     event_type: str = Field(
         ...,
@@ -127,10 +124,10 @@ class ForkOutput(BaseModel):
     duration_ms: int
 
 
-class SessionResponse(BaseModel):
-    """Response for GET /forks/{session_id}."""
+class TurnOutput(BaseModel):
+    """A single conversational turn within a session."""
 
-    session_id: str
+    turn_id: str
     prompt: str
     created_at: str
     forks: list[ForkOutput]
@@ -138,6 +135,25 @@ class SessionResponse(BaseModel):
     synthesis_token_count: int
     synthesis_duration_ms: int
     total_tokens: int
+
+
+class SessionListResponse(BaseModel):
+    """Response for GET /sessions."""
+    
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+
+
+class SessionResponse(BaseModel):
+    """Response for GET /sessions/{session_id}."""
+
+    session_id: str
+    title: str
+    created_at: str
+    updated_at: str
+    turns: list[TurnOutput]
 
 
 class HealthResponse(BaseModel):

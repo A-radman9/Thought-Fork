@@ -38,7 +38,7 @@ pip install thought-fork
 
 ## 🔑 Configuration (Bring Your Own API)
 
-Thought Fork is provider-agnostic. Because it relies on the universal `AsyncOpenAI` client, you can use **OpenAI**, **Anthropic** (via OpenRouter), **Gemini**, or any OpenAI-compatible endpoint.
+Thought Fork is provider-agnostic. Because it relies on the universal `AsyncOpenAI` client, you can use **OpenAI**, **Anthropic** (via OpenRouter), **Gemini**, or **Local Models** (like Ollama).
 
 By default, the library expects your API key in the environment variables:
 ```bash
@@ -51,8 +51,9 @@ You can also pass the configuration explicitly in code using `ForkConfig`:
 
 ```python
 from thought_fork import ForkConfig
+from openai import AsyncOpenAI
 
-# Example 1: Using OpenAI directly
+# 1. OpenAI Directly
 config = ForkConfig(
     api_key="sk-proj-...",
     api_base_url="https://api.openai.com/v1",
@@ -61,7 +62,25 @@ config = ForkConfig(
     stance_selector_model="gpt-4o-mini"
 )
 
-# Example 2: Using Anthropic / Gemini via OpenRouter (Default)
+# 2. Google Gemini (via OpenAI compatibility)
+config = ForkConfig(
+    api_key="your-google-api-key",
+    api_base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    fork_model="gemini-2.0-flash",
+    synthesis_model="gemini-2.0-pro-exp",
+    stance_selector_model="gemini-2.0-flash"
+)
+
+# 3. Local Models (Ollama / vLLM)
+# API key is automatically bypassed for localhost URLs
+config = ForkConfig(
+    api_base_url="http://localhost:11434/v1",
+    fork_model="llama3",
+    synthesis_model="llama3",
+    stance_selector_model="llama3"
+)
+
+# 4. Anthropic / Any Provider via OpenRouter (Default)
 config = ForkConfig(
     api_key="sk-or-v1-...",
     api_base_url="https://openrouter.ai/api/v1",
@@ -69,7 +88,18 @@ config = ForkConfig(
     synthesis_model="anthropic/claude-sonnet-4-6",
     stance_selector_model="anthropic/claude-haiku-4.5"
 )
+
+# 5. Enterprise BYOC (Bring Your Own Client)
+# If you have custom proxies, headers, or httpx settings:
+my_client = AsyncOpenAI(api_key="...", default_headers={"X-Custom": "123"})
+config = ForkConfig(client=my_client)
 ```
+
+### Production Resilience
+Thought Fork v0.6+ is designed for production reliability:
+- **Concurrency Limiting:** `max_concurrent_forks=5` protects against 429 rate limits.
+- **Automatic Retries:** `max_retries=2` silently handles 502 Bad Gateway errors with exponential backoff.
+- **Graceful Degradation:** If a fork completely fails, synthesis continues with the remaining successful forks.
 
 ---
 
@@ -93,8 +123,10 @@ async def main():
     print(result.synthesis)
     
     print("\n--- Individual Forks ---")
-    for fork in result.forks.values():
-        print(f"Fork {fork.id} ({fork.stance}): {fork.token_count} tokens")
+    for detail in result.fork_details:
+        print(f"Fork {detail['id']} ({detail['stance']}): {detail['token_count']} tokens")
+    
+    print(f"\nTotal tokens: {result.token_usage['total']}")
 
 if __name__ == "__main__":
     asyncio.run(main())

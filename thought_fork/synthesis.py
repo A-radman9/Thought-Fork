@@ -28,40 +28,103 @@ from openai import AsyncOpenAI
 
 from thought_fork.config import ForkConfig
 from thought_fork.fork import Fork
+from thought_fork.message import Message
 
 
 # ---------------------------------------------------------------------------
 # Synthesis prompt template
 # ---------------------------------------------------------------------------
 
-_SYNTHESIS_SYSTEM_PROMPT = """\
-You are the Synthesis Engine in the Thought Fork framework. Your role is to \
-merge multiple parallel reasoning paths ("forks") into a single, comprehensive \
-and highly structured answer.
+SYNTHESIS_SYSTEM_PROMPT = """\
+You are an elite Synthesis Engine — the intellectual backbone of the Thought Fork framework. \
+Your purpose is to take multiple expert reasoning paths ("forks") and forge them into a single \
+answer that is dramatically more powerful than any individual fork could achieve alone.
+
+You are NOT a summarizer. You are a synthesizer. The difference is critical:
+- A summarizer lists what each fork said. NEVER do this.
+- A synthesizer creates NEW insight by finding the intersections, tensions, and emergent \
+patterns BETWEEN the forks that no single fork could see on its own.
 
 Rules:
-1. Integrate insights from ALL forks — do not ignore any fork.
-2. Explicitly attribute each insight to its source fork using phrases like \
-"From the cautious fork..." or "The creative perspective revealed..."
-3. Resolve contradictions by explaining the tension and offering a balanced view.
-4. USE RICH MARKDOWN: Format your answer beautifully. Use Markdown tables to compare \
-viewpoints, bullet points for lists, and clear headers (H2/H3) to structure the synthesis.
-5. The final answer should be MORE insightful than any individual fork alone.
-6. Keep the attribution natural — weave it into the narrative, but use formatting to make it pop.
+1. DEPTH OVER BREADTH: Go deep. A thorough exploration of 3 key insights beats a shallow \
+list of 10 points. Think like a senior advisor writing a brief for a CEO — every sentence \
+must earn its place.
+2. ATTRIBUTED CONVERGENCE: Weave fork attributions naturally into your prose. \
+Use phrases like "The risk-analyst perspective reveals…" or "Where the systems-architect \
+and the behavioral-economist diverge is…" — but NEVER create a section that just lists \
+"Fork A said X, Fork B said Y." That is summarizing, not synthesizing.
+3. SURFACE THE TENSIONS: When forks disagree, this is the most valuable part. Don't \
+smooth over disagreements — illuminate them. Explain WHY experts with different lenses \
+reach different conclusions, and what that tension reveals about the problem's true complexity.
+4. ADAPTIVE FORMAT: Match your output format to the question's domain. \
+Code questions get code blocks with analysis. Strategy questions get structured arguments. \
+Technical deep-dives get diagrams described in detail. Creative questions get flowing prose. \
+NEVER force tables or bullet lists unless they genuinely serve the content.
+5. PRODUCE ACTIONABLE INSIGHT: End with something the reader can actually USE — a decision \
+framework, a concrete next step, a key question to answer, or a mental model to apply. \
+Not a generic "in conclusion, it depends" copout.
+6. WRITE AT AN EXPERT LEVEL: Assume the reader is intelligent. Use precise domain terminology. \
+6. WRITE AT AN EXPERT LEVEL: Assume the reader is intelligent. Use precise domain terminology. \
+Build sophisticated arguments. Show your reasoning chain, not just your conclusions.
 """
 
-_SYNTHESIS_USER_TEMPLATE = """\
-Here are {fork_count} parallel reasoning paths for the question:
+DEEP_SYNTHESIS_SYSTEM_PROMPT = """\
+You are an elite Adversarial Synthesis Engine. You have been given the outputs of an initial \
+synthesis AND a new set of highly specialized, adversarial experts who were specifically designed \
+to attack, critique, and tear down that first synthesis.
+
+Your job is NOT to just summarize all the forks. Your job is to produce a FINAL, BULLETPROOF \
+conclusion by taking the original ideas and subjecting them to the ruthless crucible of the new adversarial critiques.
+
+Rules:
+1. ACKNOWLEDGE THE CRITIQUE: Explicitly highlight how the new adversarial experts exposed flaws, \
+loopholes, or shallow assumptions in the initial analysis.
+2. REWRITE, DON'T REPEAT: Do not just output the same points as the first synthesis. The final \
+answer must represent an EVOLUTION of thought — it must be visibly deeper, more nuanced, and more robust \
+than the first attempt.
+3. ADAPTIVE FORMAT: Match your output format to the domain.
+4. ACTIONABLE CLOSURE: End with a highly concrete, practically applicable framework or decision model \
+that survives the adversarial scrutiny.
+"""
+
+SYNTHESIS_USER_TEMPLATE = """\
+The following {fork_count} expert reasoning paths have analyzed this question from \
+fundamentally different intellectual angles:
 
 "{prompt}"
 
 {fork_outputs}
 
-Synthesize these into a unified, comprehensive answer. Explicitly credit which \
-fork contributed each insight using natural attribution phrases.\
+Now synthesize. Do NOT summarize each fork sequentially. Instead:
+1. Identify the 2-3 deepest insights that EMERGE from the intersection of these perspectives.
+2. Surface the most important tension or disagreement between the forks and explain what it reveals.
+3. Forge a unified answer that is richer than any single fork, with natural attribution woven in.
+4. Close with a sharp, actionable takeaway.\
 """
 
-_FORK_OUTPUT_TEMPLATE = """\
+DEEP_SYNTHESIS_USER_TEMPLATE = """\
+We have executed a 2-pass recursive reasoning loop. 
+
+FIRST PASS (Initial Perspectives):
+Forks A, B, and C generated our first draft analysis.
+
+SECOND PASS (Adversarial Critique):
+Forks D, E, and F are new, hyper-specialized adversarial experts designed specifically to attack the weaknesses in the first draft.
+
+Here are the outputs from ALL {fork_count} forks:
+
+"{prompt}"
+
+{fork_outputs}
+
+Now synthesize the FINAL answer. 
+Do NOT just summarize the 6 forks. You must:
+1. Explain how the adversarial forks (D, E, F) dismantled or complicated the initial ideas from (A, B, C).
+2. Forge a final, evolved conclusion that survives this intense scrutiny.
+3. The final answer MUST NOT be a repeat of the first synthesis. It must represent a higher level of intellectual rigor.\
+"""
+
+FORK_OUTPUT_TEMPLATE = """\
 --- Fork {fork_id} ({stance}) ---
 {output}
 """
@@ -91,6 +154,7 @@ class SynthesisEngine:
         self,
         prompt: str,
         forks: list[Fork],
+        history: list[Message] | None = None,
     ) -> tuple[str, int, int]:
         """Synthesize all fork outputs into an attributed final answer.
 
@@ -103,7 +167,7 @@ class SynthesisEngine:
         """
         # Build the fork outputs section
         fork_outputs = "\n".join(
-            _FORK_OUTPUT_TEMPLATE.format(
+            FORK_OUTPUT_TEMPLATE.format(
                 fork_id=fork.id,
                 stance=fork.stance,
                 output=fork.output,
@@ -112,7 +176,7 @@ class SynthesisEngine:
         )
 
         # Build the user message
-        user_message = _SYNTHESIS_USER_TEMPLATE.format(
+        user_message = SYNTHESIS_USER_TEMPLATE.format(
             fork_count=len(forks),
             prompt=prompt,
             fork_outputs=fork_outputs,
@@ -121,13 +185,15 @@ class SynthesisEngine:
         start_time = time.perf_counter()
 
         try:
+            messages = [{"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": user_message})
+
             response = await self._client.chat.completions.create(
                 model=self.config.synthesis_model,
-                max_tokens=self.config.max_tokens,
-                messages=[
-                    {"role": "system", "content": _SYNTHESIS_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
+                max_tokens=self.config.synthesis_max_tokens,
+                messages=messages,
             )
 
             synthesis_text = response.choices[0].message.content or ""

@@ -2,6 +2,18 @@
 
 import ForkPanel from './ForkPanel';
 
+// Color palette cycled by fork index — guarantees every fork gets a distinct color
+// regardless of its AI-generated stance name.
+const FORK_COLORS = [
+  'blue',    // Fork A
+  'amber',   // Fork B
+  'rose',    // Fork C
+  'green',   // Fork D
+  'purple',  // Fork E
+  'cyan',    // Fork F
+  'gray',    // Fork G
+];
+
 export default function ForkGrid({ forks }) {
   const forkEntries = Object.entries(forks);
 
@@ -9,7 +21,7 @@ export default function ForkGrid({ forks }) {
 
   return (
     <div className="fork-grid" id="fork-grid">
-      {forkEntries.map(([id, fork]) => (
+      {forkEntries.map(([id, fork], index) => (
         <ForkPanel
           key={id}
           forkId={id}
@@ -18,6 +30,7 @@ export default function ForkGrid({ forks }) {
           tokens={fork.tokens}
           duration={fork.duration}
           done={fork.done}
+          colorClass={FORK_COLORS[index % FORK_COLORS.length]}
         />
       ))}
     </div>

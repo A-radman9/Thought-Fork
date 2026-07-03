@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thought-fork"
-version = "0.5.0"
+version = "0.6.0"
 description = "Branch AI reasoning into parallel thought paths"
 readme = "README.md"
 license = "Apache-2.0"
@@ -39,11 +39,14 @@ dev = [
     "pytest-asyncio>=0.25.0",
 ]
 
+[project.scripts]
+thought-fork = "thought_fork.cli:main"
+
 [project.urls]
-Homepage = "https://github.com/ameensaeed/thought-fork"
-Documentation = "https://github.com/ameensaeed/thought-fork#readme"
-Repository = "https://github.com/ameensaeed/thought-fork"
-Issues = "https://github.com/ameensaeed/thought-fork/issues"
+Homepage = "https://github.com/A-radman9/Thought-Fork"
+Documentation = "https://github.com/A-radman9/Thought-Fork#readme"
+Repository = "https://github.com/A-radman9/Thought-Fork"
+Issues = "https://github.com/A-radman9/Thought-Fork/issues"
 
 [tool.setuptools.packages.find]
 include = ["thought_fork*"]

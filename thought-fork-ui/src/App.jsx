@@ -1,79 +1,68 @@
 /* Copyright 2026 Ameen Saeed — Apache 2.0 License */
 
+import React, { useState } from 'react';
 import PromptInput from './components/PromptInput';
-import ForkGrid from './components/ForkGrid';
-import SynthesisPanel from './components/SynthesisPanel';
-import StancePreview from './components/StancePreview';
-import { useForkStream } from './hooks/useForkStream';
-
-const STATE_LABELS = {
-  idle: null,
-  selecting: 'Analyzing your question to find the best reasoning perspectives…',
-  forking: 'Forking — reasoning paths are streaming in parallel…',
-  synthesizing: 'Converging — synthesizing all perspectives into a unified answer…',
-  complete: null,
-};
+import Sidebar from './components/Sidebar';
+import ChatFeed from './components/ChatFeed';
+import { useChatSession } from './hooks/useChatSession';
 
 export default function App() {
-  const { state, selectedStances, forks, synthesis, sessionId, startFork, reset } = useForkStream();
+  const { 
+    sessions, 
+    currentSessionId, 
+    turns, 
+    state, 
+    activeSelectedStances, 
+    activeForks, 
+    activeSynthesis, 
+    loadSession, 
+    createNewSession, 
+    sendMessage 
+  } = useChatSession();
 
-  const statusLabel = STATE_LABELS[state];
-  const hasForks = Object.keys(forks).length > 0;
-  const showSynthesis = state === 'synthesizing' || state === 'complete';
-  const showStancePreview = state === 'selecting' || (state === 'forking' && !hasForks);
+  const [activePrompt, setActivePrompt] = useState("");
 
-  // Compute totals for complete state
-  const forkEntries = Object.values(forks);
-  const totalForkTokens = forkEntries.reduce((sum, f) => sum + (f.tokens || 0), 0);
-  const totalTokens = totalForkTokens + (synthesis.tokens || 0);
+  const handleSendMessage = (prompt, forkCount, options) => {
+    setActivePrompt(prompt);
+    sendMessage(prompt, forkCount, options);
+  };
 
   return (
-    <div className="app">
-      {/* Header */}
-      <header className="header">
-        <div className="header__logo">
-          <span className="header__icon">🔀</span>
-          <h1 className="header__title">Thought Fork</h1>
-        </div>
-        <p className="header__subtitle">Branch your AI's reasoning like Git branches</p>
-      </header>
-
-      {/* Prompt Input */}
-      <PromptInput onFork={startFork} onReset={reset} state={state} />
-
-      {/* Status bar */}
-      {statusLabel && (
-        <div className="status" id="status-bar">
-          <span className="status__dot" />
-          <span>{statusLabel}</span>
-        </div>
-      )}
-
-      {/* Stance Preview — shown while AI is selecting perspectives */}
-      {showStancePreview && (
-        <StancePreview stances={selectedStances} />
-      )}
-
-      {/* Fork Panels — shown once forks start streaming */}
-      {hasForks && <ForkGrid forks={forks} />}
-
-      {/* Synthesis */}
-      {showSynthesis && (
-        <SynthesisPanel
-          text={synthesis.text}
-          tokens={synthesis.tokens}
-          duration={synthesis.duration}
-          done={synthesis.done}
-          sessionId={sessionId}
+    <div className="app-container">
+      <Sidebar 
+        sessions={sessions} 
+        currentSessionId={currentSessionId}
+        onLoadSession={loadSession}
+        onNewSession={createNewSession}
+      />
+      
+      <main className="main-chat">
+        {turns.length === 0 && state === 'idle' && (
+          <header className="header">
+            <div className="header__logo">
+              <span className="header__icon">🔀</span>
+              <h1 className="header__title">Thought Fork</h1>
+            </div>
+            <p className="header__subtitle">Explore AI reasoning in parallel</p>
+          </header>
+        )}
+        
+        <ChatFeed 
+          turns={turns}
+          state={state}
+          activePrompt={activePrompt}
+          activeSelectedStances={activeSelectedStances}
+          activeForks={activeForks}
+          activeSynthesis={activeSynthesis}
         />
-      )}
-
-      {/* Total summary when complete */}
-      {state === 'complete' && (
-        <div className="status" style={{ marginTop: '1rem', opacity: 0.6 }}>
-          Total: {totalTokens} tokens across {forkEntries.length} forks + synthesis
+        
+        <div className="input-area">
+          <PromptInput 
+            onSend={handleSendMessage} 
+            state={state} 
+          />
         </div>
-      )}
+      </main>
     </div>
   );
 }

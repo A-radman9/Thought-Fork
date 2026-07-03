@@ -16,23 +16,18 @@
 Thought Fork API — Fork routes.
 
 POST /fork  — Start a fork session with SSE streaming
-GET  /forks/{session_id} — Retrieve a stored session
+GET  /sessions — List all chat sessions
+GET  /sessions/{session_id} — Retrieve a stored session and its conversational turns
 """
 
 from __future__ import annotations
 
-import os
-import sys
-
 from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
-# Add parent path for thought_fork imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
-from api.models import ForkRequest, SessionResponse, ForkOutput
+from api.models import ForkRequest, SessionResponse, SessionListResponse, TurnOutput, ForkOutput
 from api.streaming import stream_fork_session
-from api.database import get_session
+from api.database import get_session, list_sessions
 from thought_fork.config import ForkConfig
 
 router = APIRouter()
@@ -40,17 +35,7 @@ router = APIRouter()
 
 @router.post("/fork")
 async def create_fork(request: ForkRequest):
-    """Fork a prompt into parallel reasoning paths with SSE streaming.
-
-    The response is a Server-Sent Events stream. Events arrive in this order:
-
-    1. `stances_selected` — AI-chosen perspectives for this prompt
-    2. `fork_start` — one per fork, when it begins
-    3. `fork_chunk` — text chunks from each fork (interleaved across all forks)
-    4. `fork_done` — one per fork, when it completes
-    5. `synthesis_chunk` — text chunks from the synthesis
-    6. `synthesis_done` — final event with session_id for retrieval
-    """
+    """Fork a prompt into parallel reasoning paths with SSE streaming."""
     config = ForkConfig()
 
     return EventSourceResponse(
@@ -58,18 +43,24 @@ async def create_fork(request: ForkRequest):
             prompt=request.prompt,
             fork_count=request.fork_count,
             use_dynamic_stances=request.use_dynamic_stances,
+            session_id=request.session_id,
+            manual_stances=request.stances,
             config=config,
         ),
         media_type="text/event-stream",
     )
 
 
-@router.get("/forks/{session_id}", response_model=SessionResponse)
-async def get_fork_session(session_id: str):
-    """Retrieve a stored fork session by its ID.
+@router.get("/sessions", response_model=list[SessionListResponse])
+async def get_all_sessions():
+    """Retrieve all stored sessions for the sidebar."""
+    sessions = await list_sessions(limit=50)
+    return [SessionListResponse(**s) for s in sessions]
 
-    The session_id is returned in the synthesis_done SSE event.
-    """
+
+@router.get("/sessions/{session_id}", response_model=SessionResponse)
+async def get_fork_session(session_id: str):
+    """Retrieve a stored fork session by its ID."""
     session = await get_session(session_id)
 
     if session is None:
@@ -80,20 +71,29 @@ async def get_fork_session(session_id: str):
 
     return SessionResponse(
         session_id=session["session_id"],
-        prompt=session["prompt"],
+        title=session["title"],
         created_at=session["created_at"],
-        forks=[
-            ForkOutput(
-                fork_id=f["fork_id"],
-                stance=f["stance"],
-                output=f["output"],
-                token_count=f["token_count"],
-                duration_ms=f["duration_ms"],
+        updated_at=session["updated_at"],
+        turns=[
+            TurnOutput(
+                turn_id=t["turn_id"],
+                prompt=t["prompt"],
+                created_at=t["created_at"],
+                forks=[
+                    ForkOutput(
+                        fork_id=f["fork_id"],
+                        stance=f["stance"],
+                        output=f["output"],
+                        token_count=f["token_count"],
+                        duration_ms=f["duration_ms"],
+                    )
+                    for f in t["forks"]
+                ],
+                synthesis=t["synthesis"],
+                synthesis_token_count=t["synthesis_token_count"],
+                synthesis_duration_ms=t["synthesis_duration_ms"],
+                total_tokens=t["total_tokens"],
             )
-            for f in session["forks"]
+            for t in session["turns"]
         ],
-        synthesis=session["synthesis"],
-        synthesis_token_count=session["synthesis_token_count"],
-        synthesis_duration_ms=session["synthesis_duration_ms"],
-        total_tokens=session["total_tokens"],
     )

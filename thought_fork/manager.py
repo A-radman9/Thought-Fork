@@ -21,7 +21,7 @@ Each fork calls an AI model with a stance-specific system prompt.
 """
 
 import asyncio
-import os
+import logging
 import string
 import time
 
@@ -29,6 +29,10 @@ from openai import AsyncOpenAI
 
 from thought_fork.config import ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt
+from thought_fork.message import Message
+
+
+logger = logging.getLogger("thought_fork.manager")
 
 
 class ForkManager:
@@ -44,12 +48,21 @@ class ForkManager:
 
     def __init__(self, config: ForkConfig | None = None) -> None:
         self.config = config or ForkConfig()
-        self._client = AsyncOpenAI(
-            base_url=self.config.api_base_url,
-            api_key=self.config.api_key,
-        )
+        
+        # Use provided client (BYOC) or create a new one
+        if self.config.client:
+            self._client = self.config.client
+            logger.debug("ForkManager initialized with custom AsyncOpenAI client")
+        else:
+            self._client = AsyncOpenAI(
+                base_url=self.config.api_base_url,
+                api_key=self.config.api_key,
+            )
+            logger.debug("ForkManager initialized with default AsyncOpenAI client")
+            
+        self._semaphore = asyncio.Semaphore(self.config.max_concurrent_forks)
 
-    async def create_forks(
+    def create_forks(
         self,
         prompt: str,
         stances: list[str] | None = None,
@@ -77,7 +90,12 @@ class ForkManager:
 
         return forks
 
-    async def _run_single_fork(self, fork: Fork, prompt: str) -> Fork:
+    async def _run_single_fork(
+        self,
+        fork: Fork,
+        prompt: str,
+        history: list[Message] | None = None,
+    ) -> Fork:
         """Execute a single fork by calling the AI model.
 
         Args:
@@ -88,34 +106,65 @@ class ForkManager:
             The same Fork object with output, token_count, and duration_ms populated.
         """
         start_time = time.perf_counter()
+        
+        retries = 0
+        max_retries = self.config.max_retries
+        
+        async with self._semaphore:
+            while retries <= max_retries:
+                try:
+                    logger.debug(f"Fork {fork.id} starting (attempt {retries + 1})")
+                    messages = [{"role": "system", "content": fork.system_prompt}]
+                    if history:
+                        messages.extend(history)
+                    messages.append({"role": "user", "content": prompt})
 
-        try:
-            response = await self._client.chat.completions.create(
-                model=self.config.fork_model,
-                max_tokens=self.config.max_tokens,
-                messages=[
-                    {"role": "system", "content": fork.system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-
-            fork.output = response.choices[0].message.content or ""
-            fork.token_count = (
-                response.usage.completion_tokens if response.usage else 0
-            )
-
-        except Exception as e:
-            fork.output = f"[Fork {fork.id} error: {e}]"
-
+                    response = await asyncio.wait_for(
+                        self._client.chat.completions.create(
+                            model=self.config.fork_model,
+                            max_tokens=self.config.max_tokens,
+                            messages=messages,
+                        ),
+                        timeout=self.config.timeout_seconds,
+                    )
+        
+                    fork.output = response.choices[0].message.content or ""
+                    fork.token_count = (
+                        response.usage.completion_tokens if response.usage else 0
+                    )
+                    logger.debug(f"Fork {fork.id} completed successfully")
+                    break  # Success, exit retry loop
+                    
+                except asyncio.TimeoutError:
+                    if retries < max_retries:
+                        logger.warning(f"Fork {fork.id} timed out. Retrying...")
+                        retries += 1
+                        await asyncio.sleep(2 ** retries)  # Exponential backoff: 2s, 4s
+                    else:
+                        logger.error(f"Fork {fork.id} failed: Timeout after {max_retries} retries")
+                        fork.output = f"[Fork {fork.id} failed: timed out after {self.config.timeout_seconds}s]"
+                        break
+                        
+                except Exception as e:
+                    if retries < max_retries:
+                        logger.warning(f"Fork {fork.id} encountered error: {e}. Retrying...")
+                        retries += 1
+                        await asyncio.sleep(2 ** retries)
+                    else:
+                        logger.error(f"Fork {fork.id} failed permanently: {e}")
+                        fork.output = f"[Fork {fork.id} failed: {e}]"
+                        break
+        
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         fork.duration_ms = int(elapsed_ms)
-
+        
         return fork
 
     async def run_parallel(
         self,
         forks: list[Fork],
         prompt: str,
+        history: list[Message] | None = None,
     ) -> list[Fork]:
         """Run all forks concurrently using asyncio.gather().
 
@@ -130,6 +179,7 @@ class ForkManager:
         Returns:
             The same list of Fork objects, now with outputs populated.
         """
-        tasks = [self._run_single_fork(fork, prompt) for fork in forks]
+        logger.info(f"Running {len(forks)} forks in parallel (max_concurrent={self.config.max_concurrent_forks})")
+        tasks = [self._run_single_fork(fork, prompt, history) for fork in forks]
         completed = await asyncio.gather(*tasks)
         return list(completed)

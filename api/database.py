@@ -13,49 +13,102 @@
 # limitations under the License.
 
 """
-Thought Fork API — SQLite session persistence.
+Thought Fork API — SQLite multi-turn session persistence.
 
-Stores completed fork sessions so they can be retrieved later via
-GET /forks/{session_id}.
+Stores sessions and conversational turns.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 
 import aiosqlite
 
-# Database file location — defaults to project root
 DB_PATH = os.environ.get("THOUGHT_FORK_DB", "thought_fork_sessions.db")
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
-
-_CREATE_TABLE = """
+_CREATE_SESSIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+_CREATE_TURNS_TABLE = """
+CREATE TABLE IF NOT EXISTS turns (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    parent_turn_id TEXT,
+    parent_fork_id TEXT,
     prompt TEXT NOT NULL,
     created_at TEXT NOT NULL,
     fork_outputs TEXT NOT NULL,
     synthesis_output TEXT NOT NULL,
     synthesis_token_count INTEGER NOT NULL DEFAULT 0,
     synthesis_duration_ms INTEGER NOT NULL DEFAULT 0,
-    total_tokens INTEGER NOT NULL DEFAULT 0
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+"""
+
+_CREATE_CACHE_TABLE = """
+CREATE TABLE IF NOT EXISTS cache (
+    hash_key TEXT PRIMARY KEY,
+    output TEXT NOT NULL,
+    token_count INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    created_at TEXT NOT NULL
 );
 """
 
 
 async def init_db() -> None:
-    """Create the sessions table if it doesn't exist."""
+    """Create the sessions and turns tables."""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(_CREATE_TABLE)
+        await db.execute("PRAGMA foreign_keys = ON;")
+        await db.execute(_CREATE_SESSIONS_TABLE)
+        await db.execute(_CREATE_TURNS_TABLE)
+        await db.execute(_CREATE_CACHE_TABLE)
+        
+        # Migrations for existing DBs
+        try:
+            await db.execute("ALTER TABLE turns ADD COLUMN parent_turn_id TEXT")
+            await db.execute("ALTER TABLE turns ADD COLUMN parent_fork_id TEXT")
+        except Exception:
+            pass
+            
         await db.commit()
 
 
-async def save_session(
+async def create_session(title: str) -> str:
+    """Create a new chat session."""
+    session_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (session_id, title, now, now),
+        )
+        await db.commit()
+    return session_id
+
+async def update_session_title(session_id: str, title: str) -> None:
+    """Update the title of an existing session."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
+            (title, now, session_id),
+        )
+        await db.commit()
+
+
+async def save_turn(
     session_id: str,
     prompt: str,
     fork_outputs: list[dict],
@@ -63,30 +116,28 @@ async def save_session(
     synthesis_token_count: int,
     synthesis_duration_ms: int,
     total_tokens: int,
-) -> None:
-    """Persist a completed fork session.
-
-    Args:
-        session_id: Unique identifier for this session.
-        prompt: The original user prompt.
-        fork_outputs: List of fork output dicts with id, stance, output, token_count, duration_ms.
-        synthesis_output: The synthesized text.
-        synthesis_token_count: Tokens used by the synthesis step.
-        synthesis_duration_ms: Duration of the synthesis step in ms.
-        total_tokens: Total tokens across all forks + synthesis.
-    """
+) -> str:
+    """Persist a completed turn in a session. Returns the turn_id."""
+    turn_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("PRAGMA foreign_keys = ON;")
+        
+        # Insert turn
         await db.execute(
             """
-            INSERT INTO sessions
-                (id, prompt, created_at, fork_outputs, synthesis_output,
+            INSERT INTO turns
+                (id, session_id, parent_turn_id, parent_fork_id, prompt, created_at, fork_outputs, synthesis_output,
                  synthesis_token_count, synthesis_duration_ms, total_tokens)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                turn_id,
                 session_id,
+                None,
+                None,
                 prompt,
-                datetime.now(timezone.utc).isoformat(),
+                now,
                 json.dumps(fork_outputs),
                 synthesis_output,
                 synthesis_token_count,
@@ -94,33 +145,98 @@ async def save_session(
                 total_tokens,
             ),
         )
+        
+        # Update session timestamp
+        await db.execute(
+            "UPDATE sessions SET updated_at = ? WHERE id = ?",
+            (now, session_id),
+        )
         await db.commit()
+    return turn_id
 
 
-async def get_session(session_id: str) -> dict | None:
-    """Retrieve a stored fork session by ID.
-
-    Returns:
-        A dict with session data, or None if not found.
-    """
+async def list_sessions(limit: int = 50) -> list[dict]:
+    """Retrieve all sessions ordered by updated_at."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT * FROM sessions WHERE id = ?",
-            (session_id,),
+            "SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?",
+            (limit,)
         )
-        row = await cursor.fetchone()
+        rows = await cursor.fetchall()
+        
+        return [
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
 
-        if row is None:
+
+async def get_session(session_id: str) -> dict | None:
+    """Retrieve a stored session and all its turns by ID."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Get session
+        cursor = await db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+        session_row = await cursor.fetchone()
+        
+        if session_row is None:
             return None
-
+            
+        # Get turns
+        cursor = await db.execute(
+            "SELECT * FROM turns WHERE session_id = ? ORDER BY created_at ASC",
+            (session_id,)
+        )
+        turn_rows = await cursor.fetchall()
+        
+        turns = []
+        for row in turn_rows:
+            turns.append({
+                "turn_id": row["id"],
+                "prompt": row["prompt"],
+                "created_at": row["created_at"],
+                "forks": json.loads(row["fork_outputs"]),
+                "synthesis": row["synthesis_output"],
+                "synthesis_token_count": row["synthesis_token_count"],
+                "synthesis_duration_ms": row["synthesis_duration_ms"],
+                "total_tokens": row["total_tokens"],
+            })
+            
         return {
-            "session_id": row["id"],
-            "prompt": row["prompt"],
-            "created_at": row["created_at"],
-            "forks": json.loads(row["fork_outputs"]),
-            "synthesis": row["synthesis_output"],
-            "synthesis_token_count": row["synthesis_token_count"],
-            "synthesis_duration_ms": row["synthesis_duration_ms"],
-            "total_tokens": row["total_tokens"],
+            "session_id": session_row["id"],
+            "title": session_row["title"],
+            "created_at": session_row["created_at"],
+            "updated_at": session_row["updated_at"],
+            "turns": turns,
         }
+
+async def get_cached_output(hash_key: str) -> dict | None:
+    """Retrieve cached fork output."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM cache WHERE hash_key = ?", (hash_key,))
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "output": row["output"],
+                "token_count": row["token_count"],
+                "duration_ms": row["duration_ms"]
+            }
+        return None
+
+async def set_cached_output(hash_key: str, output: str, token_count: int, duration_ms: int) -> None:
+    """Save a fork output to cache."""
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO cache (hash_key, output, token_count, duration_ms, created_at) VALUES (?, ?, ?, ?, ?)",
+            (hash_key, output, token_count, duration_ms, now)
+        )
+        await db.commit()
+

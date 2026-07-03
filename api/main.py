@@ -21,16 +21,11 @@ Run with:
 
 from __future__ import annotations
 
-import os
-import sys
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-# Add parent path for thought_fork imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from api.database import init_db
 from api.models import HealthResponse
@@ -60,7 +55,7 @@ app = FastAPI(
         "Spawn parallel reasoning forks, each from a different stance, "
         "then converge them into an attributed synthesis."
     ),
-    version="0.2.0",
+    version="0.6.0",
     lifespan=lifespan,
 )
 
@@ -91,5 +86,5 @@ async def health_check():
     """Basic health check endpoint."""
     return HealthResponse(
         status="ok",
-        version="0.2.0",
+        version="0.6.0",
     )

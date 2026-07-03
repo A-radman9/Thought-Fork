@@ -1,8 +1,9 @@
 /* Copyright 2026 Ameen Saeed — Apache 2.0 License */
 
 import { useEffect, useRef } from 'react';
+import MarkdownBlock from './MarkdownBlock';
 
-export default function ForkPanel({ forkId, stance, text, tokens, duration, done }) {
+export default function ForkPanel({ forkId, stance, text, tokens, duration, done, colorClass }) {
   const bodyRef = useRef(null);
 
   // Auto-scroll to bottom as text streams in
@@ -17,7 +18,7 @@ export default function ForkPanel({ forkId, stance, text, tokens, duration, done
 
   return (
     <div
-      className={`fork-panel fork-panel--${stance} ${isStreaming ? 'fork-panel--streaming' : ''}`}
+      className={`fork-panel fork-panel--${colorClass} ${isStreaming ? 'fork-panel--streaming' : ''}`}
       id={`fork-panel-${forkId}`}
     >
       <div className="fork-panel__header">
@@ -40,8 +41,7 @@ export default function ForkPanel({ forkId, stance, text, tokens, duration, done
       <div className="fork-panel__body" ref={bodyRef}>
         {text ? (
           <div className="fork-panel__text">
-            {text}
-            {isStreaming && <span className="fork-panel__cursor" />}
+            <MarkdownBlock content={isStreaming ? text + ' ▍' : text} />
           </div>
         ) : (
           <div className="fork-panel__placeholder">

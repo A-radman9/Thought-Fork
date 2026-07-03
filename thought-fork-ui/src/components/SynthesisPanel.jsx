@@ -1,6 +1,7 @@
 /* Copyright 2026 Ameen Saeed — Apache 2.0 License */
 
 import { useState, useEffect, useRef } from 'react';
+import MarkdownBlock from './MarkdownBlock';
 
 export default function SynthesisPanel({ text, tokens, duration, done, sessionId }) {
   const [copied, setCopied] = useState(false);
@@ -60,8 +61,7 @@ export default function SynthesisPanel({ text, tokens, duration, done, sessionId
 
       <div className="synthesis__body" ref={bodyRef}>
         <div className="synthesis__text">
-          {text}
-          {isStreaming && <span className="fork-panel__cursor" />}
+          <MarkdownBlock content={isStreaming ? text + ' ▍' : text} />
         </div>
       </div>
 
