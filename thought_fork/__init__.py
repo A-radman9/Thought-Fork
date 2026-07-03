@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import time
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 __author__ = "Ameen Saeed"
 
 from thought_fork.config import BUILT_IN_STANCES, ForkConfig

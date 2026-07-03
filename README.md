@@ -172,12 +172,7 @@ The server exposes a POST `/fork` endpoint that streams Server-Sent Events (SSE)
 
 ---
 
-## 📜 License & Copyright
 
-Thought Fork is open-source software licensed under the **Apache License 2.0**.
-
-**Copyright © 2026 Ameen Saeed.**
-If you use, modify, or distribute this framework, you must include the original copyright notice.
 
 > "A tool is only as good as the perspectives it considers."
 
@@ -356,11 +351,6 @@ uvicorn api.main:app --port 8000
 
 ---
 
-## 📜 الرخصة وحقوق النشر
 
-برنامج Thought Fork مفتوح المصدر ومرخص تحت **رخصة أباتشي 2.0 (Apache License 2.0)**.
-
-**حقوق النشر © 2026 أمين سعيد.**
-لو استخدمت أو عدلت أو وزعت هذا الإطار، لازم ترفق إشعار حقوق النشر الأصلي.
 
 > "قوة الأداة ما تتجاوز قوة الزوايا اللي تفكر منها."
