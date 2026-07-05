@@ -1,4 +1,4 @@
-# Copyright 2026 Thought Fork Contributors
+# Copyright 2026
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ app = FastAPI(
         "Spawn parallel reasoning forks, each from a different stance, "
         "then converge them into an attributed synthesis."
     ),
-    version="0.6.2",
+    version="0.6.3",
     lifespan=lifespan,
 )
 
@@ -86,6 +86,6 @@ async def health_check():
     """Basic health check endpoint."""
     return {
         "status": "ok",
-        "version": "0.6.2",
+        "version": "0.6.3",
         "service": "thought-fork"
     }

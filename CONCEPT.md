@@ -1,6 +1,6 @@
 ﻿# Thought Fork — Concept Definition
 
-**Author**: Thought Fork Contributors  
+**Author**:   
 **Date of Conception**: June 26, 2026  
 **First Written Record**: June 29, 2026  
 
@@ -101,8 +101,8 @@ ForkManager
 
 ## Intellectual Property Notice
 
-The concept of "Thought Fork," including all vocabulary, architecture, and methodology described in this document, was conceived and authored by **Thought Fork Contributors** in June 2026. This document serves as the original written record of the concept.
+The concept of "Thought Fork," including all vocabulary, architecture, and methodology described in this document, was conceived and authored by **** in June 2026. This document serves as the original written record of the concept.
 
 ---
 
-*© 2026 Thought Fork Contributors. All rights reserved under the project license.*
+*© 2026 . All rights reserved under the project license.*

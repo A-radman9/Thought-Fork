@@ -2,13 +2,13 @@
 
 ## Creator & Original Author
 
-- **Thought Fork Contributors** — Concept creator, original author
+- **** — Concept creator, original author
   - Conceived the Thought Fork concept: June 26, 2026
   - First written record: June 29, 2026
 
 ## Acknowledgments
 
-The term **"Thought Fork"** and all associated vocabulary — including *fork*, *forking*, *stance*, *convergence*, *fork depth*, and *thought branch* — were conceived and defined by **Thought Fork Contributors**.
+The term **"Thought Fork"** and all associated vocabulary — including *fork*, *forking*, *stance*, *convergence*, *fork depth*, and *thought branch* — were conceived and defined by ****.
 
 ---
 

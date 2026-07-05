@@ -1,4 +1,4 @@
-﻿/* Copyright 2026 Thought Fork Contributors — Apache 2.0 License */
+﻿/* Copyright 2026 — Apache 2.0 License */
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
