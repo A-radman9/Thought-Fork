@@ -1,4 +1,4 @@
-# Copyright 2026 Ameen Saeed
+# Copyright 2026 Thought Fork Contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ Thought Fork spawns N parallel reasoning paths ("forks") from a single prompt,
 each biased by a different stance, then merges them into a synthesis with
 explicit attribution.
 
-Concept and vocabulary by Ameen Saeed, June 2026.
+Concept and vocabulary by Thought Fork Contributors, June 2026.
 
 Simple usage::
 
@@ -48,8 +48,8 @@ from __future__ import annotations
 
 import time
 
-__version__ = "0.6.1"
-__author__ = "Ameen Saeed"
+__version__ = "0.6.2"
+__author__ = "Thought Fork Contributors"
 
 from thought_fork.config import BUILT_IN_STANCES, ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt

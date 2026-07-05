@@ -1,4 +1,4 @@
-/* Copyright 2026 Ameen Saeed — Apache 2.0 License */
+﻿/* Copyright 2026 Thought Fork Contributors — Apache 2.0 License */
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';

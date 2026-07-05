@@ -1,4 +1,4 @@
-# Copyright 2026 Ameen Saeed
+﻿# Copyright 2026 Thought Fork Contributors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ This is the core of the "Dynamic Stance Selection" feature introduced
 in v0.5.0. It replaces the static built-in stance list with AI-generated
 perspectives that are unique to every question asked.
 
-Concept by Ameen Saeed, June 2026.
+Concept by Thought Fork Contributors, June 2026.
 """
 
 from __future__ import annotations

@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thought-fork"
-version = "0.6.1"
+version = "0.6.2"
 description = "Branch AI reasoning into parallel thought paths"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    { name = "Ameen Saeed" },
+    { name = "Thought Fork Contributors" },
 ]
 keywords = ["ai", "reasoning", "parallel", "fork", "synthesis", "llm", "thought-fork"]
 classifiers = [
