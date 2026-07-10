@@ -55,7 +55,7 @@ app = FastAPI(
         "Spawn parallel reasoning forks, each from a different stance, "
         "then converge them into an attributed synthesis."
     ),
-    version="0.6.3",
+    version="0.6.4",
     lifespan=lifespan,
 )
 
@@ -86,6 +86,6 @@ async def health_check():
     """Basic health check endpoint."""
     return {
         "status": "ok",
-        "version": "0.6.3",
+        "version": "0.6.4",
         "service": "thought-fork"
     }

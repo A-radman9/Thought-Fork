@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thought-fork"
-version = "0.6.3"
+version = "0.6.4"
 description = "Branch AI reasoning into parallel thought paths"
 readme = "README.md"
 requires-python = ">=3.11"

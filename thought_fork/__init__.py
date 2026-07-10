@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import time
 
-__version__ = "0.6.3"
+__version__ = "0.6.4"
 
 from thought_fork.config import BUILT_IN_STANCES, ForkConfig
 from thought_fork.fork import Fork, get_stance_prompt
